@@ -1,0 +1,822 @@
+"""
+M2M Programme Planner — Streamlit Web App v2
+=============================================
+New in v2:
+  • Logo upload → displayed beside event details
+  • File renamed to "M2M Programme for <<Event Name>>"
+  • Word doc (.docx) download option
+  • Excel download (existing)
+
+Run locally:   streamlit run m2m_app_v2.py
+Deploy:        Push to GitHub → share.streamlit.io
+"""
+
+import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta
+import io, base64
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+# ── Page config ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="M2M Programme Planner",
+    page_icon="📋",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── Custom CSS ────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+    .main { background-color: #FAFAFA; }
+    .stApp { font-family: 'Arial', sans-serif; }
+    .title-banner {
+        background: linear-gradient(135deg, #7B1B1B 0%, #A52828 100%);
+        color: white; padding: 1.2rem 2rem; border-radius: 10px;
+        margin-bottom: 1.5rem; box-shadow: 0 4px 12px rgba(123,27,27,0.3);
+        display: flex; align-items: center; gap: 1.5rem;
+    }
+    .title-banner-text h1 { color: white; margin: 0; font-size: 1.8rem; }
+    .title-banner-text p  { color: #F5E6C8; margin: 0.3rem 0 0 0; font-size: 0.95rem; }
+    .title-banner-logo img { max-height: 70px; border-radius: 6px; }
+    .section-header {
+        background: #C9A84C; color: white; padding: 0.5rem 1rem;
+        border-radius: 6px; font-weight: bold; margin: 1rem 0 0.5rem 0; font-size: 0.95rem;
+    }
+    .time-pill {
+        background: #F2DADA; color: #7B1B1B; padding: 0.2rem 0.6rem;
+        border-radius: 20px; font-weight: bold; font-size: 0.85rem; font-family: monospace;
+    }
+    .script-box {
+        background: #F8F9FA; border-left: 4px solid #7B1B1B;
+        padding: 0.8rem 1rem; border-radius: 0 6px 6px 0;
+        margin: 0.3rem 0; font-size: 0.88rem; line-height: 1.6;
+    }
+    .script-box-kn {
+        background: #FFF8EE; border-left: 4px solid #C9A84C;
+        padding: 0.8rem 1rem; border-radius: 0 6px 6px 0;
+        margin: 0.3rem 0; font-size: 0.88rem; line-height: 1.6;
+    }
+    .summary-card {
+        background: #2C2C2C; color: #C9A84C; padding: 1rem 1.5rem;
+        border-radius: 8px; text-align: center; font-weight: bold;
+    }
+    .event-info-panel {
+        background: white; border: 1px solid #F5E6C8; border-radius: 8px;
+        padding: 1rem 1.5rem; margin-bottom: 1rem;
+        display: flex; align-items: center; gap: 1.5rem;
+    }
+    .stDownloadButton > button {
+        background: #7B1B1B !important; color: white !important;
+        border: none !important; border-radius: 6px !important;
+        font-weight: bold !important;
+    }
+    .stDownloadButton > button:hover { background: #A52828 !important; }
+    .dl-word > button { background: #1F4E79 !important; }
+    .dl-word > button:hover { background: #2E75B6 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Script library ────────────────────────────────────────────────────────────
+SCRIPTS = [
+    (["welcome","dais","dignitar"],
+     "Respected dignitaries, honoured guests, and friends — a very warm welcome to you all.\n"
+     "We now request our distinguished guests to kindly proceed to the dais and take their seats.\n"
+     "[MC reads out names one by one as each dignitary is escorted to the stage]",
+     "ಗೌರವಾನ್ವಿತ ಅತಿಥಿಗಳೇ, ಗಣ್ಯ ಮಹನೀಯರೇ ಮತ್ತು ಆತ್ಮೀಯ ಬಂಧುಗಳೇ — ನಿಮಗೆ ಹೃತ್ಪೂರ್ವಕ ಸ್ವಾಗತ.\n"
+     "ನಾವು ಗಣ್ಯ ಅತಿಥಿಗಳನ್ನು ವೇದಿಕೆಯಲ್ಲಿ ಆಸೀನರಾಗಲು ವಿನಂತಿಸುತ್ತೇವೆ.\n"
+     "[ಪ್ರತಿಯೊಬ್ಬ ಅತಿಥಿಯ ಹೆಸರನ್ನು ಓದಿ ಅವರನ್ನು ಸ್ವಾಗತಿಸಿ]"),
+    (["naada","nadageethe","state anthem"],
+     "We shall now commence with the Naada Geethe — the State Anthem of Karnataka.\n"
+     "I request all those present to please rise.\n[Naada Geethe plays]\nThank you. Please be seated.",
+     "ನಾವು ಕರ್ನಾಟಕ ನಾಡಗೀತೆಯೊಂದಿಗೆ ಕಾರ್ಯಕ್ರಮವನ್ನು ಆರಂಭಿಸುತ್ತೇವೆ.\n"
+     "ಎಲ್ಲರೂ ದಯವಿಟ್ಟು ಎದ್ದು ನಿಲ್ಲಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ.\n"
+     "[ನಾಡಗೀತೆ ಹಾಡಲಾಗುವುದು]\nಧನ್ಯವಾದಗಳು. ದಯವಿಟ್ಟು ಕುಳಿತುಕೊಳ್ಳಿ."),
+    (["national anthem","jana gana","jai hind"],
+     "We will now conclude with the National Anthem.\nI request everyone to please rise.\n"
+     "[National Anthem plays]\nJai Hind! Jai Karnataka!\n"
+     "Thank you all. The programme now stands concluded.",
+     "ರಾಷ್ಟ್ರಗೀತೆಯೊಂದಿಗೆ ಕಾರ್ಯಕ್ರಮವನ್ನು ಮುಕ್ತಾಯಗೊಳಿಸುತ್ತೇವೆ.\n"
+     "ಎಲ್ಲರೂ ದಯವಿಟ್ಟು ಎದ್ದು ನಿಲ್ಲಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ.\n"
+     "[ರಾಷ್ಟ್ರಗೀತೆ]\nಜೈ ಹಿಂದ್! ಜೈ ಕರ್ನಾಟಕ!"),
+    (["lamp","lighting","inaugur","deepa"],
+     "We will now proceed to the auspicious lighting of the lamp.\n"
+     "I request [Chief Guest Name & Designation] and the distinguished guests\n"
+     "to kindly come forward for the lamp lighting ceremony.",
+     "ಈಗ ದೀಪ ಪ್ರಜ್ವಲನ ಕಾರ್ಯಕ್ರಮ ನಡೆಯಲಿದೆ.\n"
+     "[ಮುಖ್ಯ ಅತಿಥಿ ಹೆಸರು] ಮತ್ತು ಗಣ್ಯರನ್ನು ದೀಪ ಬೆಳಗಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+    (["welcome address","welcome speech"],
+     "We will now have the Welcome Address.\n"
+     "I request [Name], [Designation], to kindly address the gathering.\n"
+     "[After speech] We thank [Name] for those inspiring words.",
+     "ಈಗ ಸ್ವಾಗತ ಭಾಷಣ ನಡೆಯಲಿದೆ.\n"
+     "[ಹೆಸರು], [ಹುದ್ದೆ] ಅವರನ್ನು ಸಭೆಯನ್ನು ಉದ್ದೇಶಿಸಿ ಮಾತನಾಡಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+    (["keynote","inaugural address","chief guest"],
+     "We are privileged to have the Keynote / Inaugural Address.\n"
+     "I request the Chief Guest, [Full Name & Designation],\nto kindly deliver the Address.\n"
+     "[After speech] Please join me in a round of applause.",
+     "ಈಗ ಮುಖ್ಯ ಭಾಷಣ ನಡೆಯಲಿದೆ.\n"
+     "[ಪೂರ್ಣ ಹೆಸರು ಮತ್ತು ಹುದ್ದೆ] ಅವರನ್ನು ಭಾಷಣ ಮಾಡಲು ವಿನಂತಿಸುತ್ತೇವೆ.\n"
+     "[ಭಾಷಣದ ನಂತರ] ಚಪ್ಪಾಳೆಯೊಂದಿಗೆ ಅಭಿನಂದಿಸೋಣ."),
+    (["perspective","industry","context setting","biotech","startup"],
+     "We will now hear the perspective from [Name], [Designation].\n"
+     "[After speech] Thank you, [Name], for those valuable insights.",
+     "ಈಗ [ಹೆಸರು], [ಹುದ್ದೆ] ಅವರಿಂದ ದೃಷ್ಟಿಕೋನ ಕೇಳಲಿದ್ದೇವೆ.\n"
+     "[ಭಾಷಣದ ನಂತರ] ಧನ್ಯವಾದಗಳು, [ಹೆಸರು] ಅವರಿಗೆ."),
+    (["introduction","recorded message","ambassador","h.e."],
+     "We are privileged to have an introduction by [Name], [Designation],\n"
+     "followed by a recorded message from [Speaker Name].",
+     "ಈಗ [ಹೆಸರು] ಅವರಿಂದ ಪರಿಚಯ ಮತ್ತು [ಸಂದೇಶ ನೀಡಿದ ಹೆಸರು] ಅವರ ಸಂದೇಶ ಪ್ರಸ್ತುತಿಯಾಗಲಿದೆ."),
+    (["release","policy","souvenir","publication","launch"],
+     "We will now proceed to the release of [Name of Publication / Policy].\n"
+     "I request [Chief Guest / Name] and the distinguished guests to come forward.",
+     "ಈಗ [ಪ್ರಕಾಶನ / ನೀತಿ ಹೆಸರು] ಬಿಡುಗಡೆ ಮಾಡಲಾಗುವುದು.\n"
+     "[ಮುಖ್ಯ ಅತಿಥಿ] ಮತ್ತು ಗಣ್ಯರನ್ನು ಮುಂದೆ ಬರಲು ಕೋರುತ್ತೇವೆ."),
+    (["felicitat","honour","award","memento"],
+     "We will now proceed to the felicitation of our distinguished guests.\n"
+     "I request [Presenter], [Designation], to kindly felicitate [Guest Name].",
+     "ಈಗ ಗಣ್ಯ ಅತಿಥಿಗಳ ಸನ್ಮಾನ ಕಾರ್ಯಕ್ರಮ ನಡೆಯಲಿದೆ.\n"
+     "[ಹೆಸರು] ಅವರನ್ನು [ಸನ್ಮಾನಿಸಲ್ಪಡುವ ಹೆಸರು] ಅವರನ್ನು ಸನ್ಮಾನಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+    (["cultural","dance","music","performance","song"],
+     "We will now be treated to a cultural performance by [Name / Group].\nPlease enjoy.",
+     "ಈಗ [ಕಲಾವಿದ / ತಂಡ] ಅವರಿಂದ ಸಾಂಸ್ಕೃತಿಕ ಕಾರ್ಯಕ್ರಮ ಪ್ರಸ್ತುತಿಯಾಗಲಿದೆ.\nದಯವಿಟ್ಟು ಆನಂದಿಸಿ."),
+    (["vote of thanks","vote of thank"],
+     "We will now have the Vote of Thanks.\n"
+     "I request [Name], [Designation], to kindly propose the Vote of Thanks.",
+     "ಈಗ ವಂದನಾರ್ಪಣೆ ನಡೆಯಲಿದೆ.\n"
+     "[ಹೆಸರು], [ಹುದ್ದೆ] ಅವರನ್ನು ವಂದನಾರ್ಪಣೆ ಸಲ್ಲಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+    (["tea","coffee","lunch","break","networking","refreshment"],
+     "We will now take a short break. The next session commences at [Time].\n"
+     "Refreshments are available at [Location].",
+     "ನಾವು ಈಗ ವಿರಾಮ ತೆಗೆದುಕೊಳ್ಳಲಿದ್ದೇವೆ.\nಮುಂದಿನ ಅಧಿವೇಶನ [ಸಮಯ]ಕ್ಕೆ ಪ್ರಾರಂಭವಾಗಲಿದೆ."),
+    (["panel","discussion","roundtable","session"],
+     "We will now move to the Panel Discussion.\n"
+     "Moderator: [Name, Designation]. I request the panellists to take their seats.",
+     "ಈಗ ಸಮಿತಿ ಚರ್ಚೆ ನಡೆಯಲಿದೆ.\nನಿರ್ವಾಹಕರು: [ಹೆಸರು, ಹುದ್ದೆ]."),
+    (["address by","address from","address"],
+     "We will now have an address by [Name], [Designation].\n"
+     "I request [Name] to kindly come forward.\n[After speech] Thank you, [Name].",
+     "ಈಗ [ಹೆಸರು], [ಹುದ್ದೆ] ಅವರಿಂದ ಭಾಷಣ ನಡೆಯಲಿದೆ.\n"
+     "[ಹೆಸರು] ಅವರನ್ನು ಮುಂದೆ ಬರಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+]
+
+def get_script(item):
+    t = item.lower()
+    for keywords, eng, kan in SCRIPTS:
+        if any(k in t for k in keywords):
+            return eng, kan
+    eng = f"We will now have — {item}.\nI request [Name / Designation] to kindly come forward.\n[MC Note: Add specific announcement text]"
+    kan = f"ಈಗ — {item}.\n[ಹೆಸರು] ಅವರನ್ನು ಮುಂದೆ ಬರಲು ವಿನಂತಿಸುತ್ತೇವೆ."
+    return eng, kan
+
+def is_address(item):
+    return any(k in item.lower() for k in ["address","keynote","remarks","speech","perspective","introduction"])
+
+def get_category(item):
+    t = item.lower()
+    if any(k in t for k in ["address","keynote","remarks","speech","perspective","context","introduction"]): return "Address / Speech"
+    if any(k in t for k in ["felicitat","release","souvenir","policy","publication"]): return "Felicitation / Release"
+    if any(k in t for k in ["cultural","dance","music","performance"]): return "Cultural Programme"
+    if any(k in t for k in ["naada","anthem","lamp","lighting","national","inaugur"]): return "Ceremonial"
+    if any(k in t for k in ["welcome","dignitar","vote","thanks","break","tea","interval"]): return "Welcome / Housekeeping"
+    return "General"
+
+CAT_COLORS = {
+    "Address / Speech":       "#D6E4F0",
+    "Felicitation / Release": "#FDEBD0",
+    "Cultural Programme":     "#F4D03F",
+    "Ceremonial":             "#E8DAEF",
+    "Welcome / Housekeeping": "#D5F5E3",
+    "General":                "#FFFFFF",
+}
+
+# ── Time helpers ──────────────────────────────────────────────────────────────
+def parse_time(t):
+    for fmt in ["%I:%M %p","%I:%M%p","%H:%M","%I %p"]:
+        try: return datetime.strptime(t.strip().upper(), fmt)
+        except: pass
+    return None
+
+def fmt_time(dt): return dt.strftime("%I:%M %p").lstrip("0")
+def fmt_slot(s,e): return f"{fmt_time(s)} – {fmt_time(e)}"
+
+# ── Safe filename ─────────────────────────────────────────────────────────────
+def safe_filename(name):
+    import re
+    return re.sub(r'[\\/*?:"<>|]','', name).strip() or "Programme"
+
+# ── Word doc export ───────────────────────────────────────────────────────────
+def build_word(event_name, event_date, venue, rows, logo_bytes=None):
+    try:
+        from docx import Document as DocxDoc
+        from docx.shared import Pt, RGBColor, Inches, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_ALIGN_VERTICAL
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        import copy
+    except ImportError:
+        return None, "python-docx not installed"
+
+    doc = DocxDoc()
+
+    # Page margins
+    for section in doc.sections:
+        section.top_margin    = Cm(1.8)
+        section.bottom_margin = Cm(1.8)
+        section.left_margin   = Cm(2.0)
+        section.right_margin  = Cm(2.0)
+
+    def set_cell_bg(cell, hex_color):
+        tc   = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd  = OxmlElement('w:shd')
+        shd.set(qn('w:val'),   'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'),  hex_color)
+        tcPr.append(shd)
+
+    def rgb(hex_str):
+        h = hex_str.lstrip('#')
+        return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
+
+    # ── Title section with optional logo ──
+    if logo_bytes:
+        # Two-column header table: logo left, title right
+        hdr_tbl = doc.add_table(rows=1, cols=2)
+        hdr_tbl.style = 'Table Grid'
+        logo_cell  = hdr_tbl.rows[0].cells[0]
+        title_cell = hdr_tbl.rows[0].cells[1]
+        logo_cell.width  = Cm(3.5)
+        title_cell.width = Cm(13.1)
+        # Remove borders on header table
+        from docx.oxml import OxmlElement as OE2
+        for cell in [logo_cell, title_cell]:
+            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
+            tcBdr = OE2('w:tcBdr')
+            for side in ['top','left','bottom','right','insideH','insideV']:
+                b = OE2(f'w:{side}')
+                b.set(qn('w:val'),'none'); b.set(qn('w:sz'),'0')
+                b.set(qn('w:space'),'0'); b.set(qn('w:color'),'auto')
+                tcBdr.append(b)
+            tcPr.append(tcBdr)
+        # Logo image
+        logo_run = logo_cell.paragraphs[0].add_run()
+        logo_run.add_picture(io.BytesIO(logo_bytes), width=Cm(3.0))
+        logo_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Title text
+        tp = title_cell.paragraphs[0]
+        tp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        tr2 = tp.add_run(f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}")
+        tr2.bold = True; tr2.font.size = Pt(16); tr2.font.color.rgb = rgb("7B1B1B")
+    else:
+        title_para = doc.add_paragraph()
+        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title_run = title_para.add_run(f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}")
+        title_run.bold = True; title_run.font.size = Pt(18)
+        title_run.font.color.rgb = rgb("7B1B1B")
+
+    # Event details line
+    details = []
+    if event_date: details.append(f"Date: {event_date}")
+    if venue:      details.append(f"Venue: {venue}")
+    if rows:       details.append(f"Start: {rows[0]['start_str']}")
+    if details:
+        det_para = doc.add_paragraph("  |  ".join(details))
+        det_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for run in det_para.runs:
+            run.font.size = Pt(10); run.font.color.rgb = rgb("555555")
+
+    doc.add_paragraph()  # spacer
+
+    # ── Programme table ──
+    table = doc.add_table(rows=1, cols=4)
+    table.style = 'Table Grid'
+
+    col_widths = [Cm(1.2), Cm(8.0), Cm(3.5), Cm(4.0)]
+    hdr_row  = table.rows[0]
+    hdr_data = ["Sl.", "Programme Item / Activity", "Time Slot", "Remarks / Speaker"]
+    for i, (cell, text) in enumerate(zip(hdr_row.cells, hdr_data)):
+        cell.text = text
+        cell.width = col_widths[i]
+        set_cell_bg(cell, "7B1B1B")
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.runs[0]
+        run.bold = True
+        run.font.color.rgb = rgb("FFFFFF")
+        run.font.size = Pt(10)
+
+    # Data rows
+    for i, row in enumerate(rows):
+        tr    = table.add_row()
+        cat   = get_category(row['item'])
+        c_hex = CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
+        alt   = "FFF8EE" if i%2==0 else "FFFFFF"
+        bg    = c_hex if cat != "General" else alt
+        addr  = is_address(row['item'])
+
+        data = [str(i+1), row['item'], row['slot'], row.get('remarks','')]
+        for j, (cell, text) in enumerate(zip(tr.cells, data)):
+            cell.text  = text
+            cell.width = col_widths[j]
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            set_cell_bg(cell, bg)
+            p   = cell.paragraphs[0]
+            run = p.runs[0] if p.runs else p.add_run(text)
+            if j == 1:
+                run.bold = addr
+                run.font.color.rgb = rgb("1A5276") if addr else rgb("2C2C2C")
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            else:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run.font.color.rgb = rgb("2C2C2C")
+            run.font.size = Pt(10)
+
+    # Totals row
+    total_mins = sum(r['duration'] for r in rows)
+    tr = table.add_row()
+    tr.cells[0].merge(tr.cells[1])
+    tr.cells[0].text = "TOTAL DURATION"
+    set_cell_bg(tr.cells[0], "7B1B1B")
+    p = tr.cells[0].paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    run = p.runs[0]; run.bold=True; run.font.color.rgb=rgb("FFFFFF"); run.font.size=Pt(10)
+
+    tr.cells[2].merge(tr.cells[3])
+    summary = f"{total_mins} mins ({total_mins//60}h {total_mins%60}m)  |  Ends: {rows[-1]['end_str']}"
+    tr.cells[2].text = summary
+    set_cell_bg(tr.cells[2], "2C2C2C")
+    p = tr.cells[2].paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.runs[0]; run.bold=True; run.font.color.rgb=rgb("C9A84C"); run.font.size=Pt(10)
+
+    doc.add_paragraph()  # spacer
+
+    # ── MC Script section ──
+    mc_heading = doc.add_paragraph()
+    mc_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run = mc_heading.add_run("🎤  MC SCRIPT — Bilingual (English + ಕನ್ನಡ)")
+    run.bold = True; run.font.size = Pt(13); run.font.color.rgb = rgb("7B1B1B")
+
+    note = doc.add_paragraph("Replace all text in [brackets] with actual names before the event.")
+    for r in note.runs:
+        r.italic = True; r.font.size = Pt(9); r.font.color.rgb = rgb("888888")
+
+    doc.add_paragraph()
+
+    for i, row in enumerate(rows):
+        eng, kan = get_script(row['item'])
+        # Item header
+        hdr_p = doc.add_paragraph()
+        hdr_r = hdr_p.add_run(f"{i+1}.  {row['item']}  —  {row['slot']}")
+        hdr_r.bold = True; hdr_r.font.size = Pt(10)
+        hdr_r.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb("7B1B1B")
+
+        # Two-column table for bilingual scripts
+        sc_table = doc.add_table(rows=1, cols=2)
+        sc_table.style = 'Table Grid'
+        cells = sc_table.rows[0].cells
+        cells[0].width = Cm(8.3); cells[1].width = Cm(8.3)
+
+        # English
+        set_cell_bg(cells[0], "F0F7FF")
+        p_eng = cells[0].paragraphs[0]
+        r_eng = p_eng.add_run("📢 English\n" + eng)
+        r_eng.font.size = Pt(9)
+
+        # Kannada
+        set_cell_bg(cells[1], "FFF8F0")
+        p_kan = cells[1].paragraphs[0]
+        r_kan = p_kan.add_run("📢 ಕನ್ನಡ\n" + kan)
+        r_kan.font.size = Pt(9)
+
+        doc.add_paragraph()  # spacer between items
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf, None
+
+# ── Excel export ──────────────────────────────────────────────────────────────
+def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
+    MAROON="7B1B1B"; GOLD="C9A84C"; WHITE="FFFFFF"; DARK="2C2C2C"
+    CREAM="FFF8EE"; LT_GOLD="F5E6C8"; LT_MAROON="F2DADA"; GREY="F7F7F7"
+
+    def sd(s="thin",c=GOLD): return Side(style=s,color=c)
+    def bdr(s="thin"): b=sd(s); return Border(left=b,right=b,top=b,bottom=b)
+    def fill(h): return PatternFill("solid",fgColor=h)
+    def fnt(bold=False,color=DARK,size=10,italic=False):
+        return Font(name="Arial",bold=bold,color=color,size=size,italic=italic)
+    def aln(h="center",v="center",wrap=False):
+        return Alignment(horizontal=h,vertical=v,wrap_text=wrap)
+    def mbdr():
+        m=Side(style="medium",color=MAROON)
+        return Border(left=m,right=m,top=m,bottom=m)
+
+    wb = Workbook()
+
+    # ── Sheet 1: Programme Planner ──
+    ws1=wb.active; ws1.title="Programme Planner"
+    for col,w in {"A":5,"B":6,"C":30,"D":12,"E":14,"F":14,"G":18,"H":28}.items():
+        ws1.column_dimensions[col].width=w
+
+    # ── Logo in Excel (top-left corner) ──
+    if logo_bytes:
+        from openpyxl.drawing.image import Image as XLImage
+        try:
+            img = XLImage(io.BytesIO(logo_bytes))
+            img.height = 55; img.width = 120; img.anchor = "A1"
+            ws1.add_image(img)
+            ws1.row_dimensions[1].height = 50
+            ws1.merge_cells("B1:H1")
+            c = ws1["B1"]
+        except Exception:
+            ws1.merge_cells("A1:H1")
+            c = ws1["A1"]
+    else:
+        ws1.merge_cells("A1:H1")
+        c = ws1["A1"]
+    c.value = f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}"
+    c.font = Font(name="Arial",bold=True,color=WHITE,size=16)
+    c.fill = fill(MAROON); c.alignment = aln(); ws1.row_dimensions[1].height = 50
+
+    ws1.merge_cells("A2:H2")
+    c=ws1["A2"]; c.value="Automated Minute-to-Minute Schedule"
+    c.font=Font(name="Arial",italic=True,color=GOLD,size=10)
+    c.fill=fill(DARK); c.alignment=aln(); ws1.row_dimensions[2].height=18
+
+    for row_data in [
+        ("B4","Event Name :","C4",event_name or "","E4","Venue :","F4",venue or ""),
+        ("B5","Date :","C5",event_date or "","E5","Start Time :","F5",rows[0]['start_str'] if rows else "")]:
+        l1,v1,i1,d1,l2,v2,i2,d2=row_data
+        for lc,lv in[(l1,v1),(l2,v2)]:
+            c=ws1[lc]; c.value=lv
+            c.font=fnt(bold=True,color=MAROON,size=10)
+            c.alignment=aln(h="right"); c.fill=fill(LT_GOLD)
+        for ic,iv in[(i1,d1),(i2,d2)]:
+            c=ws1[ic]; c.value=iv
+            c.font=fnt(color=DARK,size=10)
+            c.alignment=aln(h="left"); c.fill=fill(WHITE); c.border=bdr()
+        ws1.row_dimensions[int(row_data[2][1])].height=18
+    ws1.merge_cells("C4:D4"); ws1.merge_cells("F4:H4"); ws1.merge_cells("C5:D5")
+
+    ws1.row_dimensions[7].height=24
+    for ci,hdr in enumerate(["#","Sl.","Programme Item / Activity","Duration\n(mins)",
+                              "Start Time","End Time","Time Slot","Remarks / Speaker"],1):
+        c=ws1.cell(row=7,column=ci)
+        c.value=hdr; c.font=Font(name="Arial",bold=True,color=WHITE,size=10)
+        c.fill=fill(MAROON); c.alignment=aln(wrap=True); c.border=bdr()
+
+    from openpyxl.styles import PatternFill as PF
+    for i,row in enumerate(rows):
+        r=8+i; ws1.row_dimensions[r].height=22
+        item=row.get('item',''); cat=get_category(item)
+        cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
+        alt=CREAM if i%2==0 else "FFFFFF"; bg=cat_hex if cat!="General" else alt
+        for ci,val,bg2,fs in [
+            (1,i+1,LT_GOLD,fnt(color="999999",size=9)),
+            (2,i+1,bg,fnt(bold=True,color=MAROON)),
+            (3,item,bg,fnt(color=DARK,bold=is_address(item))),
+            (4,row.get('duration',''),LT_MAROON,Font(name="Arial",bold=True,color=MAROON,size=11)),
+            (5,row.get('start_str',''),GREY,fnt(color="1F5C99")),
+            (6,row.get('end_str',''),GREY,fnt(color="1F5C99")),
+            (7,row.get('slot',''),LT_GOLD,Font(name="Arial",bold=True,color=MAROON,size=10)),
+            (8,row.get('remarks',''),bg,fnt(color="555555",italic=True,size=9))]:
+            c=ws1.cell(row=r,column=ci)
+            c.value=val; c.fill=PF("solid",fgColor=bg2); c.font=fs
+            c.alignment=aln(h="left" if ci in[3,8] else "center",wrap=ci in[3,8])
+            c.border=bdr()
+
+    tr=8+len(rows); ws1.row_dimensions[tr].height=22
+    ws1.merge_cells(f"A{tr}:C{tr}")
+    c=ws1[f"A{tr}"]; c.value="TOTAL PROGRAMME DURATION"
+    c.font=Font(name="Arial",bold=True,color=WHITE,size=10)
+    c.fill=fill(MAROON); c.alignment=aln(h="right"); c.border=mbdr()
+    total_mins=sum(r.get('duration',0) for r in rows if isinstance(r.get('duration'),int))
+    c=ws1[f"D{tr}"]; c.value=total_mins
+    c.font=Font(name="Arial",bold=True,color=WHITE,size=12)
+    c.fill=fill(MAROON); c.alignment=aln(); c.border=mbdr()
+    ws1.merge_cells(f"E{tr}:H{tr}")
+    c=ws1[f"E{tr}"]
+    c.value=f"Total: {total_mins} mins ({total_mins//60}h {total_mins%60}m)  |  Ends: {rows[-1]['end_str'] if rows else ''}"
+    c.font=Font(name="Arial",bold=True,color=GOLD,size=10)
+    c.fill=fill(DARK); c.alignment=aln(h="left"); c.border=mbdr()
+    ws1.freeze_panes="A8"
+
+    # ── Sheet 2: Print View ──
+    ws2=wb.create_sheet("Print View")
+    for col,w in {"A":5,"B":35,"C":20,"D":25}.items():
+        ws2.column_dimensions[col].width=w
+    ws2.merge_cells("A1:D1")
+    c=ws2["A1"]
+    c.value=f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}"
+    c.font=Font(name="Arial",bold=True,color=WHITE,size=16)
+    c.fill=fill(MAROON); c.alignment=aln(); ws2.row_dimensions[1].height=38
+    ws2.merge_cells("A2:D2")
+    c=ws2["A2"]
+    c.value=f"Date: {event_date or '—'}   |   Venue: {venue or '—'}   |   Start: {rows[0]['start_str'] if rows else '—'}"
+    c.font=Font(name="Arial",italic=True,color=GOLD,size=10)
+    c.fill=fill(DARK); c.alignment=aln(); ws2.row_dimensions[2].height=20
+    ws2.row_dimensions[4].height=22
+    for ci,hdr in enumerate(["Sl.","Programme Item / Activity","Time Slot","Remarks / Speaker"],1):
+        c=ws2.cell(row=4,column=ci)
+        c.value=hdr; c.font=Font(name="Arial",bold=True,color=WHITE,size=11)
+        c.fill=fill(MAROON); c.alignment=aln(); c.border=bdr()
+    for i,row in enumerate(rows):
+        r=5+i; ws2.row_dimensions[r].height=22
+        item=row.get('item',''); cat=get_category(item)
+        cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
+        bg=cat_hex if cat!="General" else (CREAM if i%2==0 else "FFFFFF")
+        for ci,val in[(1,i+1),(2,item),(3,row.get('slot','')),(4,row.get('remarks',''))]:
+            c=ws2.cell(row=r,column=ci)
+            c.value=val; c.fill=PF("solid",fgColor=bg)
+            c.font=fnt(bold=(ci==2 and is_address(item)),
+                       color="1A5276" if is_address(item) else DARK)
+            c.alignment=aln(h="left" if ci in[2,4] else "center",wrap=ci in[2,4])
+            c.border=bdr()
+    ws2.freeze_panes="A5"
+
+    # ── Sheet 3: MC Script ──
+    ws3=wb.create_sheet("MC Script")
+    for col,w in {"A":5,"B":6,"C":28,"D":18,"E":50,"F":46}.items():
+        ws3.column_dimensions[col].width=w
+    ws3.merge_cells("A1:F1")
+    c=ws3["A1"]; c.value="🎤  MC SCRIPT — Bilingual (English + ಕನ್ನಡ)"
+    c.font=Font(name="Arial",bold=True,color=WHITE,size=13)
+    c.fill=fill(MAROON); c.alignment=aln(); ws3.row_dimensions[1].height=30
+    ws3.merge_cells("A2:F2")
+    c=ws3["A2"]
+    c.value=f"Event: {event_name or '—'}   |   Replace [brackets] with actual names before the event"
+    c.font=fnt(italic=True,color="555555",size=9)
+    c.fill=fill(LT_GOLD); c.alignment=aln(h="left"); ws3.row_dimensions[2].height=16
+    ws3.row_dimensions[3].height=26
+    for ci,hdr in enumerate(["#","Sl.","Programme Item","Time Slot","📢 English","📢 ಕನ್ನಡ"],1):
+        c=ws3.cell(row=3,column=ci)
+        c.value=hdr; c.font=Font(name="Arial",bold=True,color=WHITE,size=10)
+        c.fill=fill(MAROON); c.alignment=aln(wrap=True); c.border=bdr()
+    for i,row in enumerate(rows):
+        r=4+i; ws3.row_dimensions[r].height=90
+        item=row.get('item',''); cat=get_category(item)
+        cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
+        eng,kan=get_script(item)
+        for ci,val,bg2,fs in [
+            (1,i+1,LT_GOLD,fnt(color="999999",size=9)),
+            (2,i+1,cat_hex,fnt(bold=True,color=MAROON)),
+            (3,item,cat_hex,fnt(bold=is_address(item),color=DARK)),
+            (4,row.get('slot',''),LT_GOLD,fnt(bold=True,color=MAROON,size=9)),
+            (5,eng,"F0F7FF" if i%2==0 else "FFFFFF",Font(name="Arial",color="1A1A2E",size=9)),
+            (6,kan,"FFF8F0" if i%2==0 else "FFFFFF",Font(name="Nirmala UI",color="1A1A2E",size=9))]:
+            c=ws3.cell(row=r,column=ci)
+            c.value=val; c.fill=PF("solid",fgColor=bg2); c.font=fs
+            c.alignment=Alignment(horizontal="left" if ci in[3,5,6] else "center",
+                                  vertical="top" if ci in[5,6] else "center",wrap_text=True)
+            c.border=bdr()
+    ws3.freeze_panes="A4"
+    ws3.page_setup.orientation="landscape"
+
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MAIN APP UI
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### ⚙️ Event Details")
+    event_name = st.text_input("Event Name", placeholder="e.g. BTS 2025 Inauguration")
+    event_date = st.text_input("Event Date", placeholder="e.g. 15-Aug-2025")
+    venue      = st.text_input("Venue", placeholder="e.g. Taj Vivanta, Bengaluru")
+    start_time = st.text_input("Start Time", value="10:00 AM")
+
+    st.markdown("---")
+    st.markdown("### 🖼️ Event Logo")
+    logo_file = st.file_uploader(
+        "Upload logo (PNG or JPG)",
+        type=["png","jpg","jpeg"],
+        help="Logo will appear in downloaded Excel and Word files"
+    )
+    logo_bytes = logo_file.read() if logo_file else None
+
+    st.markdown("---")
+    st.markdown("### ℹ️ How to use")
+    st.markdown("""
+1. Fill event details above
+2. Upload logo (optional)
+3. Add programme items + durations
+4. Download Excel or Word
+""")
+    st.markdown("---")
+    st.markdown("**Category colours:**")
+    for cat, color in CAT_COLORS.items():
+        if cat != "General":
+            st.markdown(
+                f"<span style='background:{color};padding:2px 8px;"
+                f"border-radius:4px;font-size:0.78rem;color:#2C2C2C'>{cat}</span><br>",
+                unsafe_allow_html=True)
+
+# ── Title banner (plain — logo goes into downloaded files only) ──────────────
+st.markdown("""
+<div class="title-banner">
+    <div class="title-banner-text">
+        <h1>📋 M2M Programme Planner</h1>
+        <p>Minute-to-Minute Schedule · Bilingual MC Script · Excel & Word Download</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+if logo_bytes:
+    st.info("✅ Logo uploaded — it will appear in your downloaded Excel and Word files.")
+
+# ── Event info panel ──────────────────────────────────────────────────────────
+if event_name or event_date or venue:
+    info_parts = []
+    if event_name: info_parts.append(f"<b>{event_name}</b>")
+    if event_date: info_parts.append(f"📅 {event_date}")
+    if venue:      info_parts.append(f"📍 {venue}")
+    if start_time: info_parts.append(f"🕐 {start_time}")
+    st.markdown(
+        f'<div class="event-info-panel">'
+        f'{"  &nbsp;|&nbsp;  ".join(info_parts)}</div>',
+        unsafe_allow_html=True)
+
+# ── Parse start time ──────────────────────────────────────────────────────────
+start_dt = parse_time(start_time) if start_time else parse_time("10:00 AM")
+if not start_dt:
+    st.error(f"⚠️ Can't parse '{start_time}'. Use format like '10:00 AM' or '09:30 AM'")
+    st.stop()
+
+# ── Programme table ───────────────────────────────────────────────────────────
+st.markdown('<div class="section-header">📝 Programme Items</div>',
+            unsafe_allow_html=True)
+
+DEFAULT_ITEMS = [
+    {"item":"Welcome of Dignitaries to the Dais","duration":5,"remarks":"MC announces names"},
+    {"item":"Naada Geethe (State Anthem)","duration":3,"remarks":"All stand"},
+    {"item":"Lighting of the Lamp","duration":5,"remarks":"Chief Guest & dignitaries"},
+    {"item":"Welcome Address by Host","duration":7,"remarks":""},
+    {"item":"Release of Souvenir / Publication","duration":3,"remarks":""},
+    {"item":"Keynote Address","duration":15,"remarks":"Chief Guest"},
+    {"item":"Felicitation of Dignitaries","duration":10,"remarks":""},
+    {"item":"Cultural Programme","duration":10,"remarks":""},
+    {"item":"Vote of Thanks","duration":5,"remarks":""},
+    {"item":"National Anthem","duration":2,"remarks":"All stand — Jai Hind"},
+    {"item":"","duration":None,"remarks":""},
+    {"item":"","duration":None,"remarks":""},
+    {"item":"","duration":None,"remarks":""},
+    {"item":"","duration":None,"remarks":""},
+    {"item":"","duration":None,"remarks":""},
+]
+
+edited_df = st.data_editor(
+    pd.DataFrame(DEFAULT_ITEMS),
+    column_config={
+        "item":     st.column_config.TextColumn("Programme Item / Activity", width="large"),
+        "duration": st.column_config.NumberColumn("Duration (mins)", min_value=1, max_value=180, step=1),
+        "remarks":  st.column_config.TextColumn("Remarks / Speaker", width="medium"),
+    },
+    num_rows="dynamic",
+    use_container_width=True,
+    height=430,
+    key="programme_table"
+)
+
+# ── Calculate time slots ──────────────────────────────────────────────────────
+rows = []
+current = start_dt
+for _, r in edited_df.iterrows():
+    item     = str(r.get('item','')).strip() if r.get('item') else ''
+    duration = r.get('duration')
+    remarks  = str(r.get('remarks','')).strip() if r.get('remarks') else ''
+    if not item or not duration: continue
+    try: duration = int(duration)
+    except: continue
+    end = current + timedelta(minutes=duration)
+    rows.append({
+        'item': item, 'duration': duration,
+        'start_str': fmt_time(current), 'end_str': fmt_time(end),
+        'slot': fmt_slot(current, end), 'remarks': remarks,
+    })
+    current = end
+
+# ── Output tabs + downloads ───────────────────────────────────────────────────
+if rows:
+    total_mins = sum(r['duration'] for r in rows)
+
+    # Summary cards
+    c1, c2, c3 = st.columns(3)
+    for col, val, label in [
+        (c1, str(len(rows)),        "Programme Items"),
+        (c2, f"{total_mins//60}h {total_mins%60}m", "Total Duration"),
+        (c3, rows[-1]['end_str'],   "Programme Ends"),
+    ]:
+        with col:
+            st.markdown(
+                f'<div class="summary-card">'
+                f'<div style="font-size:1.6rem">{val}</div>'
+                f'<div style="font-size:0.8rem;color:#F5E6C8">{label}</div>'
+                f'</div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["📋 Schedule", "🎤 MC Script", "🖨️ Print View"])
+
+    with tab1:
+        st.markdown('<div class="section-header">📋 Minute-to-Minute Schedule</div>',
+                    unsafe_allow_html=True)
+        for i, row in enumerate(rows):
+            cat   = get_category(row['item'])
+            color = CAT_COLORS.get(cat,"#FFFFFF")
+            addr  = is_address(row['item'])
+            st.markdown(f"""
+            <div style="display:flex;align-items:center;padding:8px 14px;
+                        background:{color};border-radius:6px;margin:4px 0;
+                        border-left:4px solid {'#1A5276' if addr else '#C9A84C'}">
+                <span style="min-width:28px;font-weight:bold;color:#7B1B1B">{i+1}.</span>
+                <span style="flex:1;font-weight:{'bold' if addr else 'normal'};
+                             color:{'#1A5276' if addr else '#2C2C2C'}">{row['item']}</span>
+                <span style="margin:0 12px;color:#888;font-size:0.82rem">{row['duration']} min</span>
+                <span class="time-pill">{row['slot']}</span>
+            </div>""", unsafe_allow_html=True)
+
+    with tab2:
+        st.markdown('<div class="section-header">🎤 Bilingual MC Script</div>',
+                    unsafe_allow_html=True)
+        st.info("💡 Replace **[bracket]** text with actual names/designations before the event")
+        for i, row in enumerate(rows):
+            eng, kan = get_script(row['item'])
+            with st.expander(f"**{i+1}. {row['item']}** — {row['slot']}", expanded=(i<2)):
+                ce, ck = st.columns(2)
+                with ce:
+                    st.markdown("**📢 English**")
+                    st.markdown(f'<div class="script-box">{eng.replace(chr(10),"<br>")}</div>',
+                                unsafe_allow_html=True)
+                with ck:
+                    st.markdown("**📢 ಕನ್ನಡ**")
+                    st.markdown(f'<div class="script-box-kn">{kan.replace(chr(10),"<br>")}</div>',
+                                unsafe_allow_html=True)
+
+    with tab3:
+        st.markdown('<div class="section-header">🖨️ Print View</div>', unsafe_allow_html=True)
+        if event_name:
+            st.markdown(f"### M2M Programme for {event_name}")
+        info = []
+        if event_date: info.append(f"📅 {event_date}")
+        if venue:      info.append(f"📍 {venue}")
+        if info: st.markdown("  |  ".join(info))
+        st.divider()
+        st.dataframe(
+            pd.DataFrame([{
+                "Sl.": i+1,
+                "Programme Item": r['item'],
+                "Time Slot": r['slot'],
+                "Remarks": r.get('remarks','')
+            } for i,r in enumerate(rows)]),
+            use_container_width=True, hide_index=True, height=460)
+
+    # ── Downloads ─────────────────────────────────────────────────────────────
+    st.divider()
+    st.markdown("### 📥 Download")
+
+    fname_base = f"M2M Programme for {safe_filename(event_name)}" if event_name else "M2M Programme"
+
+    dcol1, dcol2 = st.columns(2)
+
+    with dcol1:
+        excel_buf = build_excel(event_name, event_date, venue, rows, logo_bytes)
+        st.download_button(
+            label="⬇️ Download Excel (.xlsx)",
+            data=excel_buf,
+            file_name=f"{fname_base}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+        st.caption("3 sheets: Programme Planner · Print View · MC Script")
+
+    with dcol2:
+        word_buf, word_err = build_word(event_name, event_date, venue, rows, logo_bytes)
+        if word_buf:
+            st.markdown('<div class="dl-word">', unsafe_allow_html=True)
+            st.download_button(
+                label="⬇️ Download Word (.docx)",
+                data=word_buf,
+                file_name=f"{fname_base}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.caption("Includes Programme table + bilingual MC Script")
+        else:
+            st.warning(f"Word export unavailable: run `pip install python-docx` to enable")
+
+else:
+    st.info("👆 Add programme items and durations above to generate your schedule.")
+
+# ── Footer ─────────────────────────────────────────────────────────────────────
+st.divider()
+st.markdown("""
+<div style="text-align:center;color:#888;font-size:0.8rem">
+    M2M Programme Planner · Built for Event Management Teams
+</div>""", unsafe_allow_html=True)
