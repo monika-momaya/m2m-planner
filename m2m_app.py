@@ -86,89 +86,150 @@ SCRIPTS = [
      "[MC reads out names one by one as each dignitary is escorted to the stage]",
      "ಗೌರವಾನ್ವಿತ ಅತಿಥಿಗಳೇ, ಗಣ್ಯ ಮಹನೀಯರೇ ಮತ್ತು ಆತ್ಮೀಯ ಬಂಧುಗಳೇ — ನಿಮಗೆ ಹೃತ್ಪೂರ್ವಕ ಸ್ವಾಗತ.\n"
      "ನಾವು ಗಣ್ಯ ಅತಿಥಿಗಳನ್ನು ವೇದಿಕೆಯಲ್ಲಿ ಆಸೀನರಾಗಲು ವಿನಂತಿಸುತ್ತೇವೆ.\n"
-     "[ಪ್ರತಿಯೊಬ್ಬ ಅತಿಥಿಯ ಹೆಸರನ್ನು ಓದಿ ಅವರನ್ನು ಸ್ವಾಗತಿಸಿ]"),
+     "[ಪ್ರತಿಯೊಬ್ಬ ಅತಿಥಿಯ ಹೆಸರನ್ನು ಓದಿ ಅವರನ್ನು ಸ್ವಾಗತಿಸಿ]",
+     "सम्मानित अतिथिगण, गणमान्य महानुभाव और मित्रगण — आप सभी का हार्दिक स्वागत है।\n"
+     "हम अपने सम्मानित अतिथियों से मंच पर पधार कर आसन ग्रहण करने का अनुरोध करते हैं।\n"
+     "[MC प्रत्येक अतिथि का नाम पुकारते हुए उन्हें मंच तक ले जाएं]"),
+
     (["naada","nadageethe","state anthem"],
      "We shall now commence with the Naada Geethe — the State Anthem of Karnataka.\n"
      "I request all those present to please rise.\n[Naada Geethe plays]\nThank you. Please be seated.",
      "ನಾವು ಕರ್ನಾಟಕ ನಾಡಗೀತೆಯೊಂದಿಗೆ ಕಾರ್ಯಕ್ರಮವನ್ನು ಆರಂಭಿಸುತ್ತೇವೆ.\n"
      "ಎಲ್ಲರೂ ದಯವಿಟ್ಟು ಎದ್ದು ನಿಲ್ಲಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ.\n"
-     "[ನಾಡಗೀತೆ ಹಾಡಲಾಗುವುದು]\nಧನ್ಯವಾದಗಳು. ದಯವಿಟ್ಟು ಕುಳಿತುಕೊಳ್ಳಿ."),
+     "[ನಾಡಗೀತೆ ಹಾಡಲಾಗುವುದು]\nಧನ್ಯವಾದಗಳು. ದಯವಿಟ್ಟು ಕುಳಿತುಕೊಳ್ಳಿ.",
+     "हम अब नाडगीते — कर्नाटक के राज्य गीत के साथ कार्यक्रम आरंभ करेंगे।\n"
+     "उपस्थित सभी सदस्यों से खड़े होने का अनुरोध है।\n"
+     "[नाडगीते बजाया जाएगा]\nधन्यवाद। कृपया बैठ जाएं।"),
+
     (["national anthem","jana gana","jai hind"],
      "We will now conclude with the National Anthem.\nI request everyone to please rise.\n"
      "[National Anthem plays]\nJai Hind! Jai Karnataka!\n"
      "Thank you all. The programme now stands concluded.",
      "ರಾಷ್ಟ್ರಗೀತೆಯೊಂದಿಗೆ ಕಾರ್ಯಕ್ರಮವನ್ನು ಮುಕ್ತಾಯಗೊಳಿಸುತ್ತೇವೆ.\n"
      "ಎಲ್ಲರೂ ದಯವಿಟ್ಟು ಎದ್ದು ನಿಲ್ಲಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ.\n"
-     "[ರಾಷ್ಟ್ರಗೀತೆ]\nಜೈ ಹಿಂದ್! ಜೈ ಕರ್ನಾಟಕ!"),
+     "[ರಾಷ್ಟ್ರಗೀತೆ]\nಜೈ ಹಿಂದ್! ಜೈ ಕರ್ನಾಟಕ!",
+     "अब हम राष्ट्रगान के साथ कार्यक्रम का समापन करेंगे।\nसभी से खड़े होने का अनुरोध है।\n"
+     "[राष्ट्रगान]\nजय हिंद!\nआप सभी का धन्यवाद। कार्यक्रम का समापन होता है।"),
+
     (["lamp","lighting","inaugur","deepa"],
      "We will now proceed to the auspicious lighting of the lamp.\n"
      "I request [Chief Guest Name & Designation] and the distinguished guests\n"
      "to kindly come forward for the lamp lighting ceremony.",
      "ಈಗ ದೀಪ ಪ್ರಜ್ವಲನ ಕಾರ್ಯಕ್ರಮ ನಡೆಯಲಿದೆ.\n"
-     "[ಮುಖ್ಯ ಅತಿಥಿ ಹೆಸರು] ಮತ್ತು ಗಣ್ಯರನ್ನು ದೀಪ ಬೆಳಗಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+     "[ಮುಖ್ಯ ಅತಿಥಿ ಹೆಸರು] ಮತ್ತು ಗಣ್ಯರನ್ನು ದೀಪ ಬೆಳಗಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ.",
+     "अब हम दीप प्रज्वलन के शुभ कार्यक्रम की ओर बढ़ेंगे।\n"
+     "हम [मुख्य अतिथि का नाम एवं पद] तथा गणमान्य अतिथियों से\n"
+     "दीप प्रज्वलन हेतु मंच पर पधारने का अनुरोध करते हैं।"),
+
     (["welcome address","welcome speech"],
      "We will now have the Welcome Address.\n"
      "I request [Name], [Designation], to kindly address the gathering.\n"
      "[After speech] We thank [Name] for those inspiring words.",
      "ಈಗ ಸ್ವಾಗತ ಭಾಷಣ ನಡೆಯಲಿದೆ.\n"
-     "[ಹೆಸರು], [ಹುದ್ದೆ] ಅವರನ್ನು ಸಭೆಯನ್ನು ಉದ್ದೇಶಿಸಿ ಮಾತನಾಡಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+     "[ಹೆಸರು], [ಹುದ್ದೆ] ಅವರನ್ನು ಸಭೆಯನ್ನು ಉದ್ದೇಶಿಸಿ ಮಾತನಾಡಲು ವಿನಂತಿಸುತ್ತೇವೆ.",
+     "अब हम स्वागत भाषण की ओर बढ़ेंगे।\n"
+     "हम [नाम], [पदनाम] से सभा को संबोधित करने का अनुरोध करते हैं।\n"
+     "[भाषण के पश्चात] हम [नाम] का इन प्रेरणादायक शब्दों के लिए धन्यवाद करते हैं।"),
+
     (["keynote","inaugural address","chief guest"],
      "We are privileged to have the Keynote / Inaugural Address.\n"
      "I request the Chief Guest, [Full Name & Designation],\nto kindly deliver the Address.\n"
      "[After speech] Please join me in a round of applause.",
      "ಈಗ ಮುಖ್ಯ ಭಾಷಣ ನಡೆಯಲಿದೆ.\n"
      "[ಪೂರ್ಣ ಹೆಸರು ಮತ್ತು ಹುದ್ದೆ] ಅವರನ್ನು ಭಾಷಣ ಮಾಡಲು ವಿನಂತಿಸುತ್ತೇವೆ.\n"
-     "[ಭಾಷಣದ ನಂತರ] ಚಪ್ಪಾಳೆಯೊಂದಿಗೆ ಅಭಿನಂದಿಸೋಣ."),
+     "[ಭಾಷಣದ ನಂತರ] ಚಪ್ಪಾಳೆಯೊಂದಿಗೆ ಅಭಿನಂದಿಸೋಣ.",
+     "हमें मुख्य / उद्घाटन भाषण का सौभाग्य प्राप्त है।\n"
+     "हम मुख्य अतिथि, [पूर्ण नाम एवं पदनाम], से\nभाषण देने का अनुरोध करते हैं।\n"
+     "[भाषण के पश्चात] कृपया तालियों से उनका अभिनंदन करें।"),
+
     (["perspective","industry","context setting","biotech","startup"],
      "We will now hear the perspective from [Name], [Designation].\n"
      "[After speech] Thank you, [Name], for those valuable insights.",
      "ಈಗ [ಹೆಸರು], [ಹುದ್ದೆ] ಅವರಿಂದ ದೃಷ್ಟಿಕೋನ ಕೇಳಲಿದ್ದೇವೆ.\n"
-     "[ಭಾಷಣದ ನಂತರ] ಧನ್ಯವಾದಗಳು, [ಹೆಸರು] ಅವರಿಗೆ."),
+     "[ಭಾಷಣದ ನಂತರ] ಧನ್ಯವಾದಗಳು, [ಹೆಸರು] ಅವರಿಗೆ.",
+     "अब हम [नाम], [पदनाम] से उनके विचार सुनेंगे।\n"
+     "[भाषण के पश्चात] [नाम] का इन मूल्यवान विचारों हेतु धन्यवाद।"),
+
     (["introduction","recorded message","ambassador","h.e."],
      "We are privileged to have an introduction by [Name], [Designation],\n"
      "followed by a recorded message from [Speaker Name].",
-     "ಈಗ [ಹೆಸರು] ಅವರಿಂದ ಪರಿಚಯ ಮತ್ತು [ಸಂದೇಶ ನೀಡಿದ ಹೆಸರು] ಅವರ ಸಂದೇಶ ಪ್ರಸ್ತುತಿಯಾಗಲಿದೆ."),
+     "ಈಗ [ಹೆಸರು] ಅವರಿಂದ ಪರಿಚಯ ಮತ್ತು [ಸಂದೇಶ ನೀಡಿದ ಹೆಸರು] ಅವರ ಸಂದೇಶ ಪ್ರಸ್ತುತಿಯಾಗಲಿದೆ.",
+     "हमें [नाम], [पदनाम] द्वारा परिचय का सौभाग्य प्राप्त है,\n"
+     "इसके पश्चात [वक्ता का नाम] का रिकॉर्डेड संदेश प्रस्तुत किया जाएगा."),
+
     (["release","policy","souvenir","publication","launch"],
      "We will now proceed to the release of [Name of Publication / Policy].\n"
      "I request [Chief Guest / Name] and the distinguished guests to come forward.",
      "ಈಗ [ಪ್ರಕಾಶನ / ನೀತಿ ಹೆಸರು] ಬಿಡುಗಡೆ ಮಾಡಲಾಗುವುದು.\n"
-     "[ಮುಖ್ಯ ಅತಿಥಿ] ಮತ್ತು ಗಣ್ಯರನ್ನು ಮುಂದೆ ಬರಲು ಕೋರುತ್ತೇವೆ."),
+     "[ಮುಖ್ಯ ಅತಿಥಿ] ಮತ್ತು ಗಣ್ಯರನ್ನು ಮುಂದೆ ಬರಲು ಕೋರುತ್ತೇವೆ.",
+     "अब हम [प्रकाशन / नीति का नाम] के विमोचन की ओर बढ़ेंगे।\n"
+     "हम [मुख्य अतिथि / नाम] तथा गणमान्य अतिथियों से मंच पर पधारने का अनुरोध करते हैं।"),
+
     (["felicitat","honour","award","memento"],
      "We will now proceed to the felicitation of our distinguished guests.\n"
      "I request [Presenter], [Designation], to kindly felicitate [Guest Name].",
      "ಈಗ ಗಣ್ಯ ಅತಿಥಿಗಳ ಸನ್ಮಾನ ಕಾರ್ಯಕ್ರಮ ನಡೆಯಲಿದೆ.\n"
-     "[ಹೆಸರು] ಅವರನ್ನು [ಸನ್ಮಾನಿಸಲ್ಪಡುವ ಹೆಸರು] ಅವರನ್ನು ಸನ್ಮಾನಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+     "[ಹೆಸರು] ಅವರನ್ನು [ಸನ್ಮಾನಿಸಲ್ಪಡುವ ಹೆಸರು] ಅವರನ್ನು ಸನ್ಮಾನಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ.",
+     "अब हम अपने गणमान्य अतिथियों के सम्मान समारोह की ओर बढ़ेंगे।\n"
+     "हम [प्रस्तुतकर्ता], [पदनाम] से [अतिथि का नाम] को सम्मानित करने का अनुरोध करते हैं।"),
+
     (["cultural","dance","music","performance","song"],
      "We will now be treated to a cultural performance by [Name / Group].\nPlease enjoy.",
-     "ಈಗ [ಕಲಾವಿದ / ತಂಡ] ಅವರಿಂದ ಸಾಂಸ್ಕೃತಿಕ ಕಾರ್ಯಕ್ರಮ ಪ್ರಸ್ತುತಿಯಾಗಲಿದೆ.\nದಯವಿಟ್ಟು ಆನಂದಿಸಿ."),
+     "ಈಗ [ಕಲಾವಿದ / ತಂಡ] ಅವರಿಂದ ಸಾಂಸ್ಕೃತಿಕ ಕಾರ್ಯಕ್ರಮ ಪ್ರಸ್ತುತಿಯಾಗಲಿದೆ.\nದಯವಿಟ್ಟು ಆನಂದಿಸಿ.",
+     "अब हम [नाम / समूह] द्वारा एक सांस्कृतिक प्रस्तुति का आनंद लेंगे।\nकृपया आनंद उठाएं।"),
+
     (["vote of thanks","vote of thank"],
      "We will now have the Vote of Thanks.\n"
      "I request [Name], [Designation], to kindly propose the Vote of Thanks.",
      "ಈಗ ವಂದನಾರ್ಪಣೆ ನಡೆಯಲಿದೆ.\n"
-     "[ಹೆಸರು], [ಹುದ್ದೆ] ಅವರನ್ನು ವಂದನಾರ್ಪಣೆ ಸಲ್ಲಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+     "[ಹೆಸರು], [ಹುದ್ದೆ] ಅವರನ್ನು ವಂದನಾರ್ಪಣೆ ಸಲ್ಲಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ.",
+     "अब हम धन्यवाद प्रस्ताव की ओर बढ़ेंगे।\n"
+     "हम [नाम], [पदनाम] से धन्यवाद प्रस्ताव प्रस्तुत करने का अनुरोध करते हैं।"),
+
     (["tea","coffee","lunch","break","networking","refreshment"],
      "We will now take a short break. The next session commences at [Time].\n"
      "Refreshments are available at [Location].",
-     "ನಾವು ಈಗ ವಿರಾಮ ತೆಗೆದುಕೊಳ್ಳಲಿದ್ದೇವೆ.\nಮುಂದಿನ ಅಧಿವೇಶನ [ಸಮಯ]ಕ್ಕೆ ಪ್ರಾರಂಭವಾಗಲಿದೆ."),
+     "ನಾವು ಈಗ ವಿರಾಮ ತೆಗೆದುಕೊಳ್ಳಲಿದ್ದೇವೆ.\nಮುಂದಿನ ಅಧಿವೇಶನ [ಸಮಯ]ಕ್ಕೆ ಪ್ರಾರಂಭವಾಗಲಿದೆ.",
+     "अब हम एक संक्षिप्त विराम लेंगे। अगला सत्र [समय] पर आरंभ होगा।\n"
+     "जलपान [स्थान] पर उपलब्ध है।"),
+
     (["panel","discussion","roundtable","session"],
      "We will now move to the Panel Discussion.\n"
      "Moderator: [Name, Designation]. I request the panellists to take their seats.",
-     "ಈಗ ಸಮಿತಿ ಚರ್ಚೆ ನಡೆಯಲಿದೆ.\nನಿರ್ವಾಹಕರು: [ಹೆಸರು, ಹುದ್ದೆ]."),
+     "ಈಗ ಸಮಿತಿ ಚರ್ಚೆ ನಡೆಯಲಿದೆ.\nನಿರ್ವಾಹಕರು: [ಹೆಸರು, ಹುದ್ದೆ].",
+     "अब हम पैनल चर्चा की ओर बढ़ेंगे।\n"
+     "संचालक: [नाम, पदनाम]। हम पैनलिस्ट्स से अपने आसन ग्रहण करने का अनुरोध करते हैं।"),
+
     (["address by","address from","address"],
      "We will now have an address by [Name], [Designation].\n"
      "I request [Name] to kindly come forward.\n[After speech] Thank you, [Name].",
      "ಈಗ [ಹೆಸರು], [ಹುದ್ದೆ] ಅವರಿಂದ ಭಾಷಣ ನಡೆಯಲಿದೆ.\n"
-     "[ಹೆಸರು] ಅವರನ್ನು ಮುಂದೆ ಬರಲು ವಿನಂತಿಸುತ್ತೇವೆ."),
+     "[ಹೆಸರು] ಅವರನ್ನು ಮುಂದೆ ಬರಲು ವಿನಂತಿಸುತ್ತೇವೆ.",
+     "अब [नाम], [पदनाम] द्वारा संबोधन होगा।\n"
+     "हम [नाम] से मंच पर पधारने का अनुरोध करते हैं।\n[भाषण के पश्चात] धन्यवाद, [नाम]।"),
 ]
 
-def get_script(item):
+LANGUAGE_OPTIONS = {
+    "English + ಕನ್ನಡ (Kannada)": {"code": "kan", "label": "ಕನ್ನಡ", "font": "Nirmala UI"},
+    "English + हिन्दी (Hindi)":   {"code": "hin", "label": "हिन्दी", "font": "Nirmala UI"},
+}
+
+def get_script(item, lang_code="kan"):
+    """
+    Returns (english_text, regional_text) for a programme item.
+    lang_code: 'kan' for Kannada, 'hin' for Hindi.
+    """
     t = item.lower()
-    for keywords, eng, kan in SCRIPTS:
+    idx = 1 if lang_code == "hin" else 0   # SCRIPTS tuples are (keywords, eng, kan, hin)
+    for entry in SCRIPTS:
+        keywords, eng, kan, hin = entry
         if any(k in t for k in keywords):
-            return eng, kan
+            return eng, (hin if lang_code == "hin" else kan)
+
     eng = f"We will now have — {item}.\nI request [Name / Designation] to kindly come forward.\n[MC Note: Add specific announcement text]"
     kan = f"ಈಗ — {item}.\n[ಹೆಸರು] ಅವರನ್ನು ಮುಂದೆ ಬರಲು ವಿನಂತಿಸುತ್ತೇವೆ."
-    return eng, kan
+    hin = f"अब — {item}.\n[नाम / पदनाम] से मंच पर पधारने का अनुरोध है।"
+    return eng, (hin if lang_code == "hin" else kan)
 
 def is_address(item):
     return any(k in item.lower() for k in ["address","keynote","remarks","speech","perspective","introduction"])
@@ -207,7 +268,7 @@ def safe_filename(name):
     return re.sub(r'[\\/*?:"<>|]','', name).strip() or "Programme"
 
 # ── Word doc export ───────────────────────────────────────────────────────────
-def build_word(event_name, event_date, venue, rows, logo_bytes=None):
+def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
     """
     Generates a clean Word doc using python-docx (no Node.js dependency —
     guaranteed to work on Streamlit Cloud and locally).
@@ -355,7 +416,8 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None):
         doc.add_page_break()
 
         mc_heading = doc.add_paragraph()
-        hr = mc_heading.add_run("MC Script — Bilingual (English + ಕನ್ನಡ)")
+        _mc_lang_label = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
+        hr = mc_heading.add_run(f"MC Script — Bilingual (English + {_mc_lang_label})")
         hr.bold = True; hr.font.size = Pt(16); hr.font.color.rgb = rgb("7B1B1B")
 
         note = doc.add_paragraph()
@@ -364,7 +426,7 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None):
         doc.add_paragraph()
 
         for i, row in enumerate(rows):
-            eng, kan = get_script(row['item'])
+            eng, kan = get_script(row['item'], lang_code)
 
             item_para = doc.add_paragraph()
             ir = item_para.add_run(f"{i+1}.  {row['item']}")
@@ -389,7 +451,8 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None):
             body_e.font.size = Pt(9)
 
             p_kan = cells[1].paragraphs[0]
-            lbl_k = p_kan.add_run("ಕನ್ನಡ\n")
+            lang_label_local = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
+            lbl_k = p_kan.add_run(lang_label_local + "\n")
             lbl_k.bold = True; lbl_k.font.size = Pt(9); lbl_k.font.color.rgb = rgb("7B5200")
             body_k = p_kan.add_run(kan)
             body_k.font.size = Pt(9)
@@ -408,7 +471,7 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None):
 
 
 # ── Excel export ──────────────────────────────────────────────────────────────
-def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
+def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
     MAROON="7B1B1B"; GOLD="C9A84C"; WHITE="FFFFFF"; DARK="2C2C2C"
     CREAM="FFF8EE"; LT_GOLD="F5E6C8"; LT_MAROON="F2DADA"; GREY="F7F7F7"
 
@@ -563,7 +626,8 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
     # MC header: info left, logo right
     ws3.row_dimensions[1].height=26
     c=ws3["A1"]
-    c.value="🎤  MC SCRIPT — Bilingual (English + ಕನ್ನಡ)"
+    _lang_label_xl = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
+    c.value=f"🎤  MC SCRIPT — Bilingual (English + {_lang_label_xl})"
     c.font=Font(name="Arial",bold=True,color=WHITE,size=13)
     c.fill=fill(MAROON); c.alignment=aln(h="left")
     ws3.merge_cells("A1:D1")
@@ -589,14 +653,14 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
         except Exception: pass
 
     ws3.row_dimensions[6].height=26
-    for ci,hdr in enumerate(["Time Slot","Programme Item","📢 English","📢 ಕನ್ನಡ"],1):
+    for ci,hdr in enumerate(["Time Slot","Programme Item","📢 English",f"📢 {_lang_label_xl}"],1):
         c=ws3.cell(row=6,column=ci)
         c.value=hdr; c.font=Font(name="Arial",bold=True,color=WHITE,size=10)
         c.fill=fill(MAROON); c.alignment=aln(wrap=True); c.border=bdr()
     for i,row in enumerate(rows):
         r=7+i; ws3.row_dimensions[r].height=90
         item=row.get('item',''); cat=get_category(item)
-        eng,kan=get_script(item)
+        eng,kan=get_script(item, lang_code)
         for ci,val,bg2,fs in [
             (1,row.get('slot',''),"FFFFFF",fnt(bold=True,color=MAROON,size=9)),
             (2,item,"FFFFFF",fnt(bold=is_address(item),color=DARK)),
@@ -624,6 +688,17 @@ with st.sidebar:
     event_date = st.text_input("Event Date", placeholder="e.g. 15-Aug-2025")
     venue      = st.text_input("Venue", placeholder="e.g. Taj Vivanta, Bengaluru")
     start_time = st.text_input("Start Time", value="10:00 AM")
+
+    st.markdown("---")
+    st.markdown("### 🗣️ MC Script Language")
+    lang_choice = st.radio(
+        "Bilingual pairing for MC Script",
+        options=list(LANGUAGE_OPTIONS.keys()),
+        index=0,
+        help="Choose the regional language to pair with English for this event"
+    )
+    lang_code = LANGUAGE_OPTIONS[lang_choice]["code"]
+    lang_label = LANGUAGE_OPTIONS[lang_choice]["label"]
 
     st.markdown("---")
     st.markdown("### 🖼️ Event Logo")
@@ -775,11 +850,11 @@ if rows:
             </div>""", unsafe_allow_html=True)
 
     with tab2:
-        st.markdown('<div class="section-header">🎤 Bilingual MC Script</div>',
+        st.markdown(f'<div class="section-header">🎤 Bilingual MC Script (English + {lang_label})</div>',
                     unsafe_allow_html=True)
         st.info("💡 Replace **[bracket]** text with actual names/designations before the event")
         for i, row in enumerate(rows):
-            eng, kan = get_script(row['item'])
+            eng, kan = get_script(row['item'], lang_code)
             with st.expander(f"**{i+1}. {row['item']}** — {row['slot']}", expanded=(i<2)):
                 ce, ck = st.columns(2)
                 with ce:
@@ -787,7 +862,7 @@ if rows:
                     st.markdown(f'<div class="script-box">{eng.replace(chr(10),"<br>")}</div>',
                                 unsafe_allow_html=True)
                 with ck:
-                    st.markdown("**📢 ಕನ್ನಡ**")
+                    st.markdown(f"**📢 {lang_label}**")
                     st.markdown(f'<div class="script-box-kn">{kan.replace(chr(10),"<br>")}</div>',
                                 unsafe_allow_html=True)
 
@@ -816,7 +891,7 @@ if rows:
     dcol1, dcol2 = st.columns(2)
 
     with dcol1:
-        excel_buf = build_excel(event_name, event_date, venue, rows, logo_bytes)
+        excel_buf = build_excel(event_name, event_date, venue, rows, logo_bytes, lang_code)
         st.download_button(
             label="⬇️ Download Excel (.xlsx)",
             data=excel_buf,
@@ -827,7 +902,7 @@ if rows:
         st.caption("3 sheets: Programme Planner · Print View · MC Script")
 
     with dcol2:
-        word_buf, word_err = build_word(event_name, event_date, venue, rows, logo_bytes)
+        word_buf, word_err = build_word(event_name, event_date, venue, rows, logo_bytes, lang_code)
         if word_buf:
             st.markdown('<div class="dl-word">', unsafe_allow_html=True)
             st.download_button(
