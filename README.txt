@@ -1,25 +1,53 @@
-M2M PROGRAMME PLANNER v4 — Now with Hindi support!
-=====================================================
+M2M PROGRAMME PLANNER v4 — Major Update
+==========================================
 
-NEW: MC SCRIPT LANGUAGE SELECTOR
-  In the sidebar, choose:
-    • English + ಕನ್ನಡ (Kannada)  — for Karnataka events
-    • English + हिन्दी (Hindi)    — for events in other states
+WHAT CHANGED IN THIS VERSION:
 
-  Your choice applies to:
-    - The MC Script tab in the app
-    - The downloaded Excel (MC Script sheet)
-    - The downloaded Word document (page 2 onwards)
+1. TITLE COLOUR
+   Changed from brown/maroon to dark navy blue throughout.
 
-  All 15 programme item types (Welcome, Naada Geethe, Lamp Lighting,
-  Keynote Address, Vote of Thanks, etc.) have full scripts in both
-  languages — switch anytime per event.
+2. PROGRAMME TABLE
+   - No more bold on "Address" rows — clean plain text only
+   - Reduced gap between event details and the table
+   - Font size increased to 12pt
+   - Timings + ":" columns made narrower; Programme Details
+     column widened to use the space efficiently
+   - Removed "Total: X mins | Programme ends at..." line
+     (the last row's timing already shows when it ends)
 
-OTHER FEATURES (unchanged):
-  • Clean Word/Excel output — no colour fills, View Gridlines mode
-  • Logo embedded top-left/right as configured
-  • Time Slot | Programme Item — clean 2-column layout
-  • Auto time-slot calculation
+3. FOOTER
+   New footer on every page: "For internal use only | <Event Name>"
+
+4. FONT
+   Default document font set to Calibri throughout.
+
+5. MC SCRIPT TABLES
+   Now have light, visible grey borders (previously borderless)
+   so each English/regional-language box is clearly outlined.
+
+6. DOWNLOAD ORDER
+   Excel button appears first (left), Word second (right) —
+   Excel is the recommended offline fallback.
+
+7. LIVE EXCEL FORMULAS (Programme Planner sheet)
+   This sheet now has REAL Excel formulas, not just static text.
+   If the web app is ever unreachable, your team can open the
+   downloaded Excel directly:
+     - Edit the hidden Duration column (D) for any item
+     - Edit the seed Start Time in cell F1
+     - All Time Slots in Column A recalculate automatically
+   This makes the Excel a genuine offline backup tool.
+
+8. DEFAULT PROGRAMME TEMPLATE
+   The app now pre-loads with the full Bengaluru Tech Summit 2026
+   inaugural structure (19 items) instead of a generic 10-item demo —
+   ready to customise for your next event in seconds.
+
+EVERYTHING ELSE UNCHANGED:
+   - Bilingual MC Script (English + Kannada / Hindi toggle)
+   - Logo upload, embedded in both Excel and Word
+   - Clean borderless Programme table (View Gridlines mode)
+   - Print View tab in the app
 
 LOCAL:
   Windows → double-click Run_App_Windows.bat

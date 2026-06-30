@@ -289,6 +289,21 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
 
     try:
         doc = DocxDoc()
+        # Set default document font to Calibri
+        normal_style = doc.styles['Normal']
+        normal_style.font.name = 'Calibri'
+        normal_style.font.size = Pt(11)
+        normal_style.font.name = 'Calibri'
+        # Ensure Calibri applies to complex scripts (Devanagari/Kannada fallback handled per-run)
+        rpr = normal_style.element.get_or_add_rPr()
+        rFonts = rpr.find(qn('w:rFonts'))
+        if rFonts is None:
+            rFonts = OxmlElement('w:rFonts')
+            rpr.append(rFonts)
+        rFonts.set(qn('w:ascii'), 'Calibri')
+        rFonts.set(qn('w:hAnsi'), 'Calibri')
+        rFonts.set(qn('w:eastAsia'), 'Calibri')
+
         for section in doc.sections:
             section.top_margin = Cm(1.6)
             section.bottom_margin = Cm(1.6)
@@ -319,13 +334,28 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
             """
             Sets borders to 'nil' so the table has NO visible printed borders —
             matching Word's 'View Gridlines' mode (faint on-screen guide only,
-            invisible when printed or exported to PDF).
+            invisible when printed or exported to PDF). Used for the Programme table.
             """
             tc = cell._tc; tcPr = tc.get_or_add_tcPr()
             tcBorders = OxmlElement('w:tcBorders')
             for side in ['top','left','bottom','right']:
                 el = OxmlElement(f'w:{side}')
                 el.set(qn('w:val'),'nil')
+                tcBorders.append(el)
+            tcPr.append(tcBorders)
+
+        def light_borders_visible(cell):
+            """
+            Sets a thin, light-grey VISIBLE border — used for the MC Script
+            tables so each English/regional-language box is clearly outlined.
+            """
+            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
+            tcBorders = OxmlElement('w:tcBorders')
+            for side in ['top','left','bottom','right']:
+                el = OxmlElement(f'w:{side}')
+                el.set(qn('w:val'),'single')
+                el.set(qn('w:sz'),'4')
+                el.set(qn('w:color'),'D9D9D9')
                 tcBorders.append(el)
             tcPr.append(tcBorders)
 
@@ -344,12 +374,14 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
             tp = title_cell.paragraphs[0]
             tp.alignment = WD_ALIGN_PARAGRAPH.LEFT
             tr = tp.add_run(f"M2M Programme for Inaugural of {event_name or 'Event'}")
-            tr.bold = True; tr.font.size = Pt(20); tr.font.color.rgb = rgb("7B1B1B")
+            tr.bold = True; tr.font.size = Pt(20); tr.font.color.rgb = rgb("1A2B4C")
+            tr.font.name = 'Calibri'
         else:
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
             tr = title_para.add_run(f"M2M Programme for Inaugural of {event_name or 'Event'}")
-            tr.bold = True; tr.font.size = Pt(20); tr.font.color.rgb = rgb("7B1B1B")
+            tr.bold = True; tr.font.size = Pt(20); tr.font.color.rgb = rgb("1A2B4C")
+            tr.font.name = 'Calibri'
 
         # ── Date / Venue / Start Time line ──
         details = []
@@ -359,15 +391,16 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
         if details:
             det_para = doc.add_paragraph("  |  ".join(details))
             det_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            det_para.paragraph_format.space_after = Pt(6)
             for run in det_para.runs:
                 run.font.size = Pt(10); run.font.color.rgb = rgb("555555")
-
-        doc.add_paragraph()
+                run.font.name = 'Calibri'
 
         # ── Programme table: Timings | : | Programme Details ──
+        # Narrow Timings + ":" columns, wide Programme Details column
         table = doc.add_table(rows=1, cols=3)
         table.autofit = False
-        col_widths = [Cm(3.6), Cm(0.6), Cm(11.4)]
+        col_widths = [Cm(3.2), Cm(0.5), Cm(11.9)]
 
         hdr = table.rows[0]
         for j, (cell, text) in enumerate(zip(hdr.cells, ["Timings","","Programme Details"])):
@@ -375,10 +408,13 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
             light_borders(cell)
             set_cell_bg(cell, "F5F5F5")
             p = cell.paragraphs[0]
+            p.paragraph_format.space_before = Pt(2)
+            p.paragraph_format.space_after = Pt(2)
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER if j!=2 else WD_ALIGN_PARAGRAPH.LEFT
             if text:
                 run = p.add_run(text)
-                run.bold = True; run.font.size = Pt(10); run.font.color.rgb = rgb("2C2C2C")
+                run.bold = True; run.font.size = Pt(12); run.font.color.rgb = rgb("2C2C2C")
+                run.font.name = 'Calibri'
 
         for row in rows:
             tr_row = table.add_row()
@@ -389,8 +425,12 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
                 light_borders(cell)
                 set_cell_bg(cell, "FFFFFF")
                 p = cell.paragraphs[0]
+                p.paragraph_format.space_before = Pt(2)
+                p.paragraph_format.space_after = Pt(2)
+                p.paragraph_format.line_spacing = 1.0
                 run = p.add_run(text)
-                run.font.size = Pt(10)
+                run.font.size = Pt(12)
+                run.font.name = 'Calibri'
                 if j == 0:
                     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     run.font.color.rgb = rgb("2C2C2C")
@@ -399,18 +439,17 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
                     run.font.color.rgb = rgb("888888")
                 else:
                     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    run.bold = is_address(row['item'])
                     run.font.color.rgb = rgb("2C2C2C")
 
-        # ── Total line ──
-        total_mins = sum(r['duration'] for r in rows)
-        tot_para = doc.add_paragraph()
-        tot_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        tr_run = tot_para.add_run(
-            f"Total: {total_mins} mins ({total_mins//60}h {total_mins%60}m)  |  "
-            f"Programme ends at {rows[-1]['end_str']}"
-        )
-        tr_run.italic = True; tr_run.font.size = Pt(9); tr_run.font.color.rgb = rgb("555555")
+        # ── Footer: "For internal use only | <event name>" ──
+        section = doc.sections[0]
+        footer = section.footer
+        footer_para = footer.paragraphs[0]
+        footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        footer_run = footer_para.add_run(f"For internal use only  |  {event_name or 'Event'}")
+        footer_run.font.size = Pt(8); footer_run.font.color.rgb = rgb("999999")
+        footer_run.font.name = 'Calibri'
+        footer_run.italic = True
 
         # ── Page break → MC Script ──
         doc.add_page_break()
@@ -418,11 +457,13 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
         mc_heading = doc.add_paragraph()
         _mc_lang_label = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
         hr = mc_heading.add_run(f"MC Script — Bilingual (English + {_mc_lang_label})")
-        hr.bold = True; hr.font.size = Pt(16); hr.font.color.rgb = rgb("7B1B1B")
+        hr.bold = True; hr.font.size = Pt(16); hr.font.color.rgb = rgb("1A2B4C")
+        hr.font.name = 'Calibri'
 
         note = doc.add_paragraph()
         nr = note.add_run("Replace all text in [brackets] with actual names/designations before the event.")
         nr.italic = True; nr.font.size = Pt(9); nr.font.color.rgb = rgb("888888")
+        nr.font.name = 'Calibri'
         doc.add_paragraph()
 
         for i, row in enumerate(rows):
@@ -431,29 +472,34 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
             item_para = doc.add_paragraph()
             ir = item_para.add_run(f"{i+1}.  {row['item']}")
             ir.bold = True; ir.font.size = Pt(11)
-            ir.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb("7B1B1B")
+            ir.font.name = 'Calibri'
+            ir.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb("1A2B4C")
             sr = item_para.add_run(f"   —   {row['slot']}")
             sr.font.size = Pt(10); sr.font.color.rgb = rgb("555555")
+            sr.font.name = 'Calibri'
 
             sc_table = doc.add_table(rows=1, cols=2)
             sc_table.autofit = False
             cells = sc_table.rows[0].cells
             cells[0].width = Cm(7.7); cells[1].width = Cm(7.7)
 
-            light_borders(cells[0]); light_borders(cells[1])
+            light_borders_visible(cells[0]); light_borders_visible(cells[1])
             set_cell_bg(cells[0], "FFFFFF")
             set_cell_bg(cells[1], "FFFFFF")
 
             p_eng = cells[0].paragraphs[0]
             lbl_e = p_eng.add_run("English\n")
             lbl_e.bold = True; lbl_e.font.size = Pt(9); lbl_e.font.color.rgb = rgb("1A5276")
+            lbl_e.font.name = 'Calibri'
             body_e = p_eng.add_run(eng)
             body_e.font.size = Pt(9)
+            body_e.font.name = 'Calibri'
 
             p_kan = cells[1].paragraphs[0]
             lang_label_local = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
             lbl_k = p_kan.add_run(lang_label_local + "\n")
             lbl_k.bold = True; lbl_k.font.size = Pt(9); lbl_k.font.color.rgb = rgb("7B5200")
+            lbl_k.font.name = 'Calibri'
             body_k = p_kan.add_run(kan)
             body_k.font.size = Pt(9)
             body_k.font.name = "Nirmala UI"
@@ -549,25 +595,92 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         c.fill=fill(MAROON); c.alignment=aln(wrap=True); c.border=bdr()
 
     from openpyxl.styles import PatternFill as PF
+
+    # ── LIVE FORMULA ENGINE ──
+    # Hidden helper columns: D = Duration (mins), E = Start (formula), F = End (formula)
+    # Column A (visible) = Time Slot, built via formula from E & F
+    # This means: if the app is unreachable, the team can edit Column D (Duration)
+    # or the Start Time cell directly in Excel, and Column A recalculates automatically.
+    ws1.column_dimensions["D"].width=12
+    ws1.column_dimensions["E"].width=2
+    ws1.column_dimensions["F"].width=2
+
+    # Hidden start-time seed cell (Excel TIME value) — feeds the first formula row
+    start_time_str = rows[0]['start_str'] if rows else "10:00 AM"
+    seed_cell = ws1["F1"]
+    seed_cell.value = f"=TIMEVALUE(\"{start_time_str}\")"
+    seed_cell.number_format = "h:mm AM/PM"
+    ws1.column_dimensions["F"].width = 0  # hide helper column visually (width 0)
+
+    # Duration header
+    dur_hdr = ws1.cell(row=6, column=4)
+    dur_hdr.value = "Duration\n(mins)"
+    dur_hdr.font=Font(name="Arial",bold=True,color=WHITE,size=10)
+    dur_hdr.fill=fill(MAROON); dur_hdr.alignment=aln(wrap=True); dur_hdr.border=bdr()
+
     for i,row in enumerate(rows):
         r=7+i; ws1.row_dimensions[r].height=22
         item=row.get('item',''); addr=is_address(item)
-        for ci,val,bg2,fs in [
-            (1,row.get('slot',''),"FFFFFF",fnt(color=DARK)),
-            (2,item,"FFFFFF",fnt(color=DARK,bold=addr))]:
-            c=ws1.cell(row=r,column=ci)
-            c.value=val; c.fill=PF("solid",fgColor=bg2); c.font=fs
-            c.alignment=aln(h="left" if ci==1 else "left",wrap=(ci==2))
-            c.border=bdr()
+        duration = row.get('duration', 0)
+
+        # Column D: Duration (mins) — EDITABLE, drives the formula chain
+        dcell = ws1.cell(row=r, column=4)
+        dcell.value = duration
+        dcell.font = fnt(color=MAROON, bold=True)
+        dcell.fill = PF("solid", fgColor="FFF8EE")
+        dcell.alignment = aln(h="center")
+        dcell.border = bdr()
+
+        # Column E: Start time (formula) — first row uses seed, others chain from previous End
+        ecell = ws1.cell(row=r, column=5)
+        if i == 0:
+            ecell.value = "=$F$1"
+        else:
+            ecell.value = f"=F{r-1}"
+        ecell.number_format = "h:mm AM/PM"
+        ecell.font = Font(size=1, color="FFFFFF")  # invisible helper
+
+        # Column F: End time (formula) = Start + Duration/1440
+        fcell = ws1.cell(row=r, column=6)
+        fcell.value = f"=E{r}+D{r}/1440"
+        fcell.number_format = "h:mm AM/PM"
+        fcell.font = Font(size=1, color="FFFFFF")  # invisible helper
+
+        # Column A: Time Slot — LIVE FORMULA combining E and F as text
+        acell = ws1.cell(row=r, column=1)
+        acell.value = f'=TEXT(E{r},"h:mm AM/PM")&" \u2013 "&TEXT(F{r},"h:mm AM/PM")'
+        acell.fill = PF("solid", fgColor="FFFFFF")
+        acell.font = fnt(color=DARK)
+        acell.alignment = aln(h="left", wrap=False)
+        acell.border = bdr()
+
+        # Column B: Programme Item
+        bcell = ws1.cell(row=r, column=2)
+        bcell.value = item
+        bcell.fill = PF("solid", fgColor="FFFFFF")
+        bcell.font = fnt(color=DARK, bold=addr)
+        bcell.alignment = aln(h="left", wrap=True)
+        bcell.border = bdr()
 
     tr=7+len(rows); ws1.row_dimensions[tr].height=22
-    total_mins=sum(r.get('duration',0) for r in rows if isinstance(r.get('duration'),int))
+    last_row = 7+len(rows)-1
     c=ws1[f"A{tr}"]
-    c.value=f"Total: {total_mins} mins ({total_mins//60}h {total_mins%60}m)  |  Ends: {rows[-1]['end_str'] if rows else ''}"
+    c.value = f'="Programme ends at "&TEXT(F{last_row},"h:mm AM/PM")&"  (auto-calculated)"'
     c.font=Font(name="Arial",bold=True,color=GOLD,size=10)
     c.fill=fill(DARK); c.alignment=aln(h="left"); c.border=mbdr()
     ws1.merge_cells(f"A{tr}:B{tr}")
     ws1.freeze_panes="A7"
+
+    # Note about live editing
+    note_row = tr + 2
+    ws1.merge_cells(f"A{note_row}:B{note_row}")
+    nc = ws1[f"A{note_row}"]
+    nc.value = ("\u2139\ufe0f  Edit the Duration column (D) or Start Time (cell F1) — "
+                "Time Slots above recalculate automatically. Use this sheet as an offline "
+                "backup if the web app is unavailable.")
+    nc.font = fnt(italic=True, color="888888", size=8)
+    nc.alignment = aln(h="left", wrap=True)
+    ws1.row_dimensions[note_row].height = 28
 
     # ── Sheet 2: Print View ──
     ws2=wb.create_sheet("Print View")
@@ -762,21 +875,26 @@ st.markdown('<div class="section-header">📝 Programme Items</div>',
             unsafe_allow_html=True)
 
 DEFAULT_ITEMS = [
-    {"item":"Welcome of Dignitaries to the Dais","duration":5,"remarks":"MC announces names"},
-    {"item":"Naada Geethe (State Anthem)","duration":3,"remarks":"All stand"},
-    {"item":"Lighting of the Lamp","duration":5,"remarks":"Chief Guest & dignitaries"},
-    {"item":"Welcome Address by Host","duration":7,"remarks":""},
-    {"item":"Release of Souvenir / Publication","duration":3,"remarks":""},
-    {"item":"Keynote Address","duration":15,"remarks":"Chief Guest"},
-    {"item":"Felicitation of Dignitaries","duration":10,"remarks":""},
-    {"item":"Cultural Programme","duration":10,"remarks":""},
-    {"item":"Vote of Thanks","duration":5,"remarks":""},
-    {"item":"National Anthem","duration":2,"remarks":"All stand — Jai Hind"},
-    {"item":"","duration":None,"remarks":""},
-    {"item":"","duration":None,"remarks":""},
-    {"item":"","duration":None,"remarks":""},
-    {"item":"","duration":None,"remarks":""},
-    {"item":"","duration":None,"remarks":""},
+    {"item":"MC welcomes dignitaries onto the Dias","duration":3,"remarks":""},
+    {"item":"Naada Geethe (State Anthem)","duration":4,"remarks":""},
+    {"item":"Welcome address by Managing Director, Karnataka Innovation and Technology Society (KITS), Dept. of Electronics, IT, Bt and S&T, Govt. of Karnataka","duration":4,"remarks":""},
+    {"item":"Context setting by Secretary to Government, Department of Electronics, IT, Bt and S&T, Govt. of Karnataka","duration":5,"remarks":""},
+    {"item":"Lighting of the lamp and Inauguration of BTS 2026","duration":3,"remarks":""},
+    {"item":"Inaugural Address by the Chief Guest","duration":10,"remarks":""},
+    {"item":"Information Technology Industry perspective by Shri Kris Gopalakrishnan, Chairperson, Vision Group on Information Technology, Govt. of Karnataka","duration":3,"remarks":""},
+    {"item":"Biotechnology Industry perspective by Dr. Kiran Mazumdar Shaw, Chairperson, Vision Group on Biotechnology, Government of Karnataka","duration":3,"remarks":""},
+    {"item":"Startup perspective by Shri Prashanth Prakash, Chairperson, Vision Group on Startups, Government of Karnataka","duration":3,"remarks":""},
+    {"item":"Address by representative from Software Technology Parks of India (STPI)","duration":5,"remarks":""},
+    {"item":"Address by Industry Leader 1","duration":7,"remarks":""},
+    {"item":"Address by Industry Leader 2","duration":7,"remarks":""},
+    {"item":"Address by Industry Leader 3","duration":7,"remarks":""},
+    {"item":"Address by His Excellency, <country>","duration":6,"remarks":""},
+    {"item":"Address by His Excellency, <country>","duration":6,"remarks":""},
+    {"item":"Release of AVGC Policy and Address by","duration":5,"remarks":""},
+    {"item":"Release of Biotech Policy and Address by","duration":5,"remarks":""},
+    {"item":"Address by Hon'ble Minister for Information Technology & Biotechnology and Rural Development & Panchayat Raj, Govt. of Karnataka","duration":6,"remarks":""},
+    {"item":"Address by Hon'ble Deputy Chief Minister of Karnataka / <State>","duration":7,"remarks":""},
+    {"item":"Words of Thanks","duration":5,"remarks":""},
 ]
 
 edited_df = st.data_editor(
