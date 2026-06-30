@@ -208,196 +208,288 @@ def safe_filename(name):
 
 # ── Word doc export ───────────────────────────────────────────────────────────
 def build_word(event_name, event_date, venue, rows, logo_bytes=None):
-    try:
-        from docx import Document as DocxDoc
-        from docx.shared import Pt, RGBColor, Inches, Cm
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.enum.table import WD_ALIGN_VERTICAL
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
-        import copy
-    except ImportError:
-        return None, "python-docx not installed"
+    """
+    Generates a clean Word doc matching the BTS 2023 MC Copy format:
+    - Logo centred at top (if provided)
+    - Title in maroon, centred
+    - Date/venue line in grey, centred
+    - Clean 3-col table: Timings | : | Programme Details
+    - No colour fills — pure black & white
+    - MC Script on page 2
+    Uses Node.js docx library for reliable output.
+    """
+    import subprocess, json, base64, tempfile, os
 
-    doc = DocxDoc()
-
-    # Page margins
-    for section in doc.sections:
-        section.top_margin    = Cm(1.8)
-        section.bottom_margin = Cm(1.8)
-        section.left_margin   = Cm(2.0)
-        section.right_margin  = Cm(2.0)
-
-    def set_cell_bg(cell, hex_color):
-        tc   = cell._tc
-        tcPr = tc.get_or_add_tcPr()
-        shd  = OxmlElement('w:shd')
-        shd.set(qn('w:val'),   'clear')
-        shd.set(qn('w:color'), 'auto')
-        shd.set(qn('w:fill'),  hex_color)
-        tcPr.append(shd)
-
-    def rgb(hex_str):
-        h = hex_str.lstrip('#')
-        return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
-
-    # ── Title section with optional logo ──
-    if logo_bytes:
-        # Two-column header table: logo left, title right
-        hdr_tbl = doc.add_table(rows=1, cols=2)
-        hdr_tbl.style = 'Table Grid'
-        logo_cell  = hdr_tbl.rows[0].cells[0]
-        title_cell = hdr_tbl.rows[0].cells[1]
-        logo_cell.width  = Cm(3.5)
-        title_cell.width = Cm(13.1)
-        # Remove borders on header table
-        from docx.oxml import OxmlElement as OE2
-        for cell in [logo_cell, title_cell]:
-            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
-            tcBdr = OE2('w:tcBdr')
-            for side in ['top','left','bottom','right','insideH','insideV']:
-                b = OE2(f'w:{side}')
-                b.set(qn('w:val'),'none'); b.set(qn('w:sz'),'0')
-                b.set(qn('w:space'),'0'); b.set(qn('w:color'),'auto')
-                tcBdr.append(b)
-            tcPr.append(tcBdr)
-        # Logo image
-        logo_run = logo_cell.paragraphs[0].add_run()
-        logo_run.add_picture(io.BytesIO(logo_bytes), width=Cm(3.0))
-        logo_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        # Title text
-        tp = title_cell.paragraphs[0]
-        tp.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        tr2 = tp.add_run(f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}")
-        tr2.bold = True; tr2.font.size = Pt(16); tr2.font.color.rgb = rgb("7B1B1B")
-    else:
-        title_para = doc.add_paragraph()
-        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        title_run = title_para.add_run(f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}")
-        title_run.bold = True; title_run.font.size = Pt(18)
-        title_run.font.color.rgb = rgb("7B1B1B")
-
-    # Event details line
-    details = []
-    if event_date: details.append(f"Date: {event_date}")
-    if venue:      details.append(f"Venue: {venue}")
-    if rows:       details.append(f"Start: {rows[0]['start_str']}")
-    if details:
-        det_para = doc.add_paragraph("  |  ".join(details))
-        det_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        for run in det_para.runs:
-            run.font.size = Pt(10); run.font.color.rgb = rgb("555555")
-
-    doc.add_paragraph()  # spacer
-
-    # ── Programme table ──
-    table = doc.add_table(rows=1, cols=4)
-    table.style = 'Table Grid'
-
-    col_widths = [Cm(1.2), Cm(8.0), Cm(3.5), Cm(4.0)]
-    hdr_row  = table.rows[0]
-    hdr_data = ["Sl.", "Programme Item / Activity", "Time Slot", "Remarks / Speaker"]
-    for i, (cell, text) in enumerate(zip(hdr_row.cells, hdr_data)):
-        cell.text = text
-        cell.width = col_widths[i]
-        set_cell_bg(cell, "7B1B1B")
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.runs[0]
-        run.bold = True
-        run.font.color.rgb = rgb("FFFFFF")
-        run.font.size = Pt(10)
-
-    # Data rows
-    for i, row in enumerate(rows):
-        tr    = table.add_row()
-        cat   = get_category(row['item'])
-        c_hex = CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
-        alt   = "FFF8EE" if i%2==0 else "FFFFFF"
-        bg    = c_hex if cat != "General" else alt
-        addr  = is_address(row['item'])
-
-        data = [str(i+1), row['item'], row['slot'], row.get('remarks','')]
-        for j, (cell, text) in enumerate(zip(tr.cells, data)):
-            cell.text  = text
-            cell.width = col_widths[j]
-            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-            set_cell_bg(cell, bg)
-            p   = cell.paragraphs[0]
-            run = p.runs[0] if p.runs else p.add_run(text)
-            if j == 1:
-                run.bold = addr
-                run.font.color.rgb = rgb("1A5276") if addr else rgb("2C2C2C")
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            else:
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run.font.color.rgb = rgb("2C2C2C")
-            run.font.size = Pt(10)
-
-    # Totals row
-    total_mins = sum(r['duration'] for r in rows)
-    tr = table.add_row()
-    tr.cells[0].merge(tr.cells[1])
-    tr.cells[0].text = "TOTAL DURATION"
-    set_cell_bg(tr.cells[0], "7B1B1B")
-    p = tr.cells[0].paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    run = p.runs[0]; run.bold=True; run.font.color.rgb=rgb("FFFFFF"); run.font.size=Pt(10)
-
-    tr.cells[2].merge(tr.cells[3])
-    summary = f"{total_mins} mins ({total_mins//60}h {total_mins%60}m)  |  Ends: {rows[-1]['end_str']}"
-    tr.cells[2].text = summary
-    set_cell_bg(tr.cells[2], "2C2C2C")
-    p = tr.cells[2].paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.runs[0]; run.bold=True; run.font.color.rgb=rgb("C9A84C"); run.font.size=Pt(10)
-
-    doc.add_paragraph()  # spacer
-
-    # ── MC Script section ──
-    mc_heading = doc.add_paragraph()
-    mc_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    run = mc_heading.add_run("🎤  MC SCRIPT — Bilingual (English + ಕನ್ನಡ)")
-    run.bold = True; run.font.size = Pt(13); run.font.color.rgb = rgb("7B1B1B")
-
-    note = doc.add_paragraph("Replace all text in [brackets] with actual names before the event.")
-    for r in note.runs:
-        r.italic = True; r.font.size = Pt(9); r.font.color.rgb = rgb("888888")
-
-    doc.add_paragraph()
-
-    for i, row in enumerate(rows):
+    # Build script data
+    script_rows = []
+    for row in rows:
         eng, kan = get_script(row['item'])
-        # Item header
-        hdr_p = doc.add_paragraph()
-        hdr_r = hdr_p.add_run(f"{i+1}.  {row['item']}  —  {row['slot']}")
-        hdr_r.bold = True; hdr_r.font.size = Pt(10)
-        hdr_r.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb("7B1B1B")
+        script_rows.append({
+            'slot':     row['slot'],
+            'item':     row['item'],
+            'eng_lines': [l for l in eng.split('\n') if l.strip() or True],
+            'kan_lines': [l for l in kan.split('\n') if l.strip() or True],
+        })
 
-        # Two-column table for bilingual scripts
-        sc_table = doc.add_table(rows=1, cols=2)
-        sc_table.style = 'Table Grid'
-        cells = sc_table.rows[0].cells
-        cells[0].width = Cm(8.3); cells[1].width = Cm(8.3)
+    payload = {
+        'event_name': event_name or 'INAUGURAL',
+        'event_date': event_date or '',
+        'venue':      venue or '',
+        'start_time': rows[0]['start_str'] if rows else '',
+        'total_mins': sum(r['duration'] for r in rows),
+        'end_time':   rows[-1]['end_str'] if rows else '',
+        'rows':       script_rows,
+        'logo_b64':   base64.b64encode(logo_bytes).decode() if logo_bytes else '',
+    }
 
-        # English
-        set_cell_bg(cells[0], "F0F7FF")
-        p_eng = cells[0].paragraphs[0]
-        r_eng = p_eng.add_run("📢 English\n" + eng)
-        r_eng.font.size = Pt(9)
+    js_script = r"""
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+        AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
+        PageBreak, ImageRun } = require('docx');
+const fs = require('fs');
 
-        # Kannada
-        set_cell_bg(cells[1], "FFF8F0")
-        p_kan = cells[1].paragraphs[0]
-        r_kan = p_kan.add_run("📢 ಕನ್ನಡ\n" + kan)
-        r_kan.font.size = Pt(9)
+const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 
-        doc.add_paragraph()  # spacer between items
+const thinBorder = { style: BorderStyle.SINGLE, size: 4, color: "CCCCCC" };
+const noBorder   = { style: BorderStyle.NIL, size: 0, color: "FFFFFF" };
+const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder, insideH: thinBorder, insideV: thinBorder };
+const noBorders  = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+const hdrBorder  = { style: BorderStyle.SINGLE, size: 6, color: "999999" };
+const hdrBorders = { top: hdrBorder, bottom: hdrBorder, left: hdrBorder, right: hdrBorder, insideH: hdrBorder, insideV: hdrBorder };
 
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    return buf, None
+const children = [];
+
+// ── Logo (centred, above title) ──
+if (data.logo_b64) {
+    const logoBuffer = Buffer.from(data.logo_b64, 'base64');
+    children.push(new Paragraph({
+        alignment: AlignmentType.LEFT,
+        spacing: { before: 0, after: 100 },
+        children: [new ImageRun({
+            data: logoBuffer,
+            transformation: { width: 320, height: 120 },
+            type: 'png',
+        })]
+    }));
+}
+
+// ── Title ──
+const titleLine = `M2M Programme for Inaugural of ${data.event_name}`;
+children.push(new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: { before: 0, after: 60 },
+    children: [new TextRun({ text: titleLine, bold: true, font: "Arial", size: 28, color: "7B1B1B" })]
+}));
+
+// ── Date / Venue line ──
+const detailParts = [];
+if (data.event_date) detailParts.push("Date: " + data.event_date);
+if (data.venue)      detailParts.push("Venue: " + data.venue);
+if (data.start_time) detailParts.push("Start Time: " + data.start_time);
+children.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 0, after: 240 },
+    children: [new TextRun({ text: detailParts.join(' | '), font: "Arial", size: 18, color: "555555" })]
+}));
+
+// ── Programme table ──
+const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+        new TableCell({
+            width: { size: 2400, type: WidthType.DXA },
+            borders: hdrBorders,
+            shading: { fill: "F5F5F5", type: ShadingType.CLEAR },
+            margins: { top: 80, bottom: 80, left: 120, right: 80 },
+            children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: "Timings", bold: true, font: "Arial", size: 20 })]
+            })]
+        }),
+        new TableCell({
+            width: { size: 360, type: WidthType.DXA },
+            borders: hdrBorders,
+            shading: { fill: "F5F5F5", type: ShadingType.CLEAR },
+            margins: { top: 80, bottom: 80, left: 60, right: 60 },
+            children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: " ", font: "Arial", size: 20 })]
+            })]
+        }),
+        new TableCell({
+            width: { size: 6400, type: WidthType.DXA },
+            borders: hdrBorders,
+            shading: { fill: "F5F5F5", type: ShadingType.CLEAR },
+            margins: { top: 80, bottom: 80, left: 120, right: 80 },
+            children: [new Paragraph({
+                children: [new TextRun({ text: "Programme Details", bold: true, font: "Arial", size: 20 })]
+            })]
+        }),
+    ]
+});
+
+const dataRows = data.rows.map((row, i) => new TableRow({
+    children: [
+        new TableCell({
+            width: { size: 2400, type: WidthType.DXA },
+            borders: allBorders,
+            verticalAlign: VerticalAlign.TOP,
+            margins: { top: 80, bottom: 80, left: 120, right: 80 },
+            children: [new Paragraph({
+                alignment: AlignmentType.LEFT,
+                spacing: { before: 0, after: 0 },
+                children: [new TextRun({ text: row.slot, font: "Arial", size: 18 })]
+            })]
+        }),
+        new TableCell({
+            width: { size: 360, type: WidthType.DXA },
+            borders: allBorders,
+            verticalAlign: VerticalAlign.TOP,
+            margins: { top: 80, bottom: 80, left: 60, right: 60 },
+            children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 0 },
+                children: [new TextRun({ text: ":", font: "Arial", size: 18 })]
+            })]
+        }),
+        new TableCell({
+            width: { size: 6400, type: WidthType.DXA },
+            borders: allBorders,
+            verticalAlign: VerticalAlign.TOP,
+            margins: { top: 80, bottom: 80, left: 120, right: 80 },
+            children: [new Paragraph({
+                spacing: { before: 0, after: 0 },
+                children: [new TextRun({ text: row.item, font: "Arial", size: 18 })]
+            })]
+        }),
+    ]
+}));
+
+children.push(new Table({
+    width: { size: 9160, type: WidthType.DXA },
+    columnWidths: [2400, 360, 6400],
+    rows: [headerRow, ...dataRows],
+}));
+
+// ── Total line ──
+children.push(new Paragraph({
+    alignment: AlignmentType.RIGHT,
+    spacing: { before: 100, after: 0 },
+    children: [new TextRun({
+        text: `Total: ${data.total_mins} mins (${Math.floor(data.total_mins/60)}h ${data.total_mins%60}m)  |  Programme ends at ${data.end_time}`,
+        font: "Arial", size: 16, italics: true, color: "555555"
+    })]
+}));
+
+// ── Page break → MC Script ──
+children.push(new Paragraph({ children: [new PageBreak()] }));
+
+// ── MC Script heading ──
+children.push(new Paragraph({
+    spacing: { before: 0, after: 160 },
+    children: [new TextRun({ text: "MC SCRIPT — Bilingual (English + ಕನ್ನಡ)", bold: true, font: "Arial", size: 24, color: "7B1B1B" })]
+}));
+children.push(new Paragraph({
+    spacing: { before: 0, after: 300 },
+    children: [new TextRun({
+        text: "Replace all text in [brackets] with actual names/designations before the event.",
+        font: "Arial", size: 18, italics: true, color: "888888"
+    })]
+}));
+
+// ── MC Script entries ──
+data.rows.forEach((row, i) => {
+    children.push(new Paragraph({
+        spacing: { before: 240, after: 60 },
+        children: [
+            new TextRun({ text: `${i+1}.  ${row.item}`, bold: true, font: "Arial", size: 20, color: "7B1B1B" }),
+            new TextRun({ text: `  —  ${row.slot}`, font: "Arial", size: 18, color: "555555" }),
+        ]
+    }));
+
+    const scriptTable = new Table({
+        width: { size: 9160, type: WidthType.DXA },
+        columnWidths: [4580, 4580],
+        rows: [new TableRow({
+            children: [
+                new TableCell({
+                    width: { size: 4580, type: WidthType.DXA },
+                    borders: allBorders,
+                    shading: { fill: "FFFFFF", type: ShadingType.CLEAR },
+                    margins: { top: 80, bottom: 80, left: 120, right: 120 },
+                    children: [
+                        new Paragraph({ spacing: { before:0, after:60 },
+                            children:[new TextRun({ text:"📢 English", bold:true, font:"Arial", size:18, color:"1A5276" })] }),
+                        ...row.eng_lines.map(line => new Paragraph({
+                            spacing: { before:0, after:40 },
+                            children:[new TextRun({ text: line, font:"Arial", size:17 })]
+                        }))
+                    ]
+                }),
+                new TableCell({
+                    width: { size: 4580, type: WidthType.DXA },
+                    borders: allBorders,
+                    shading: { fill: "FFFFFF", type: ShadingType.CLEAR },
+                    margins: { top: 80, bottom: 80, left: 120, right: 120 },
+                    children: [
+                        new Paragraph({ spacing: { before:0, after:60 },
+                            children:[new TextRun({ text:"📢 ಕನ್ನಡ", bold:true, font:"Nirmala UI", size:18, color:"7B5200" })] }),
+                        ...row.kan_lines.map(line => new Paragraph({
+                            spacing: { before:0, after:40 },
+                            children:[new TextRun({ text: line, font:"Nirmala UI", size:17 })]
+                        }))
+                    ]
+                }),
+            ]
+        })]
+    });
+    children.push(scriptTable);
+});
+
+const doc = new Document({
+    sections: [{
+        properties: {
+            page: {
+                size: { width: 11906, height: 16838 },
+                margin: { top: 720, right: 720, bottom: 720, left: 720 }
+            }
+        },
+        children
+    }]
+});
+
+Packer.toBuffer(doc).then(buf => {
+    fs.writeFileSync(process.argv[3], buf);
+});
+"""
+
+    try:
+        # Write payload to temp file
+        tmp_dir  = tempfile.mkdtemp()
+        data_path = os.path.join(tmp_dir, 'data.json')
+        out_path  = os.path.join(tmp_dir, 'output.docx')
+        js_path   = os.path.join(tmp_dir, 'build.js')
+
+        with open(data_path, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False)
+        with open(js_path, 'w', encoding='utf-8') as f:
+            f.write(js_script)
+
+        result = subprocess.run(
+            ['node', js_path, data_path, out_path],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            return None, f"JS error: {result.stderr[:300]}"
+
+        with open(out_path, 'rb') as f:
+            buf = io.BytesIO(f.read())
+        buf.seek(0)
+        return buf, None
+
+    except Exception as e:
+        return None, str(e)
+
 
 # ── Excel export ──────────────────────────────────────────────────────────────
 def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
@@ -419,161 +511,190 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
 
     # ── Sheet 1: Programme Planner ──
     ws1=wb.active; ws1.title="Programme Planner"
-    for col,w in {"A":5,"B":6,"C":30,"D":12,"E":14,"F":14,"G":18,"H":28}.items():
+    for col,w in {"A":22,"B":52,"C":18}.items():
         ws1.column_dimensions[col].width=w
 
-    # ── Logo in Excel (top-left corner) ──
+    # ── Header: Left = event info, Right = logo ──
+    # Row 1: Event Name (A1) | Logo (C1 spanning down)
+    ws1.row_dimensions[1].height = 28
+    ws1.row_dimensions[2].height = 22
+    ws1.row_dimensions[3].height = 22
+    ws1.row_dimensions[4].height = 22
+
+    # Event name — left side
+    c=ws1["A1"]
+    c.value = f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}"
+    c.font=Font(name="Arial",bold=True,color=WHITE,size=14)
+    c.fill=fill(MAROON); c.alignment=aln(h="left")
+    ws1.merge_cells("A1:B1")
+
+    # Event details rows
+    details_rows = [
+        ("Event :", event_name or "—"),
+        ("Date  :", event_date or "—"),
+        ("Venue :", venue or "—"),
+        ("Start Time :", rows[0]["start_str"] if rows else "—"),
+    ]
+    for di, (lbl, val) in enumerate(details_rows):
+        r = 2 + di
+        ws1.row_dimensions[r].height = 18
+        cl = ws1.cell(row=r, column=1)
+        cl.value = lbl
+        cl.font = Font(name="Arial",bold=True,color=MAROON,size=9)
+        cl.fill = fill(LT_GOLD); cl.alignment = aln(h="right")
+        cv = ws1.cell(row=r, column=2)
+        cv.value = val
+        cv.font = Font(name="Arial",color=DARK,size=9)
+        cv.fill = fill(WHITE); cv.border = bdr()
+        cv.alignment = aln(h="left")
+
+    # Logo — right side (col C, rows 1-4)
     if logo_bytes:
         from openpyxl.drawing.image import Image as XLImage
         try:
             img = XLImage(io.BytesIO(logo_bytes))
-            img.height = 55; img.width = 120; img.anchor = "A1"
+            img.height = 88; img.width = 160; img.anchor = "C1"
             ws1.add_image(img)
-            ws1.row_dimensions[1].height = 50
-            ws1.merge_cells("B1:H1")
-            c = ws1["B1"]
+            ws1.column_dimensions["C"].width = 22
         except Exception:
-            ws1.merge_cells("A1:H1")
-            c = ws1["A1"]
-    else:
-        ws1.merge_cells("A1:H1")
-        c = ws1["A1"]
-    c.value = f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}"
-    c.font = Font(name="Arial",bold=True,color=WHITE,size=16)
-    c.fill = fill(MAROON); c.alignment = aln(); ws1.row_dimensions[1].height = 50
+            pass
 
-    ws1.merge_cells("A2:H2")
-    c=ws1["A2"]; c.value="Automated Minute-to-Minute Schedule"
-    c.font=Font(name="Arial",italic=True,color=GOLD,size=10)
-    c.fill=fill(DARK); c.alignment=aln(); ws1.row_dimensions[2].height=18
+    # (event details now in header rows above)
 
-    for row_data in [
-        ("B4","Event Name :","C4",event_name or "","E4","Venue :","F4",venue or ""),
-        ("B5","Date :","C5",event_date or "","E5","Start Time :","F5",rows[0]['start_str'] if rows else "")]:
-        l1,v1,i1,d1,l2,v2,i2,d2=row_data
-        for lc,lv in[(l1,v1),(l2,v2)]:
-            c=ws1[lc]; c.value=lv
-            c.font=fnt(bold=True,color=MAROON,size=10)
-            c.alignment=aln(h="right"); c.fill=fill(LT_GOLD)
-        for ic,iv in[(i1,d1),(i2,d2)]:
-            c=ws1[ic]; c.value=iv
-            c.font=fnt(color=DARK,size=10)
-            c.alignment=aln(h="left"); c.fill=fill(WHITE); c.border=bdr()
-        ws1.row_dimensions[int(row_data[2][1])].height=18
-    ws1.merge_cells("C4:D4"); ws1.merge_cells("F4:H4"); ws1.merge_cells("C5:D5")
-
-    ws1.row_dimensions[7].height=24
-    for ci,hdr in enumerate(["#","Sl.","Programme Item / Activity","Duration\n(mins)",
-                              "Start Time","End Time","Time Slot","Remarks / Speaker"],1):
-        c=ws1.cell(row=7,column=ci)
+    ws1.row_dimensions[6].height=24
+    for ci,hdr in enumerate(["Time Slot","Programme Item / Activity"],1):
+        c=ws1.cell(row=6,column=ci)
         c.value=hdr; c.font=Font(name="Arial",bold=True,color=WHITE,size=10)
         c.fill=fill(MAROON); c.alignment=aln(wrap=True); c.border=bdr()
 
     from openpyxl.styles import PatternFill as PF
     for i,row in enumerate(rows):
-        r=8+i; ws1.row_dimensions[r].height=22
+        r=7+i; ws1.row_dimensions[r].height=22
         item=row.get('item',''); cat=get_category(item)
         cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
         alt=CREAM if i%2==0 else "FFFFFF"; bg=cat_hex if cat!="General" else alt
         for ci,val,bg2,fs in [
-            (1,i+1,LT_GOLD,fnt(color="999999",size=9)),
-            (2,i+1,bg,fnt(bold=True,color=MAROON)),
-            (3,item,bg,fnt(color=DARK,bold=is_address(item))),
-            (4,row.get('duration',''),LT_MAROON,Font(name="Arial",bold=True,color=MAROON,size=11)),
-            (5,row.get('start_str',''),GREY,fnt(color="1F5C99")),
-            (6,row.get('end_str',''),GREY,fnt(color="1F5C99")),
-            (7,row.get('slot',''),LT_GOLD,Font(name="Arial",bold=True,color=MAROON,size=10)),
-            (8,row.get('remarks',''),bg,fnt(color="555555",italic=True,size=9))]:
+            (1,row.get('slot',''),LT_GOLD,Font(name="Arial",bold=True,color=MAROON,size=10)),
+            (2,item,bg,fnt(color=DARK,bold=is_address(item)))]:
             c=ws1.cell(row=r,column=ci)
             c.value=val; c.fill=PF("solid",fgColor=bg2); c.font=fs
-            c.alignment=aln(h="left" if ci in[3,8] else "center",wrap=ci in[3,8])
+            c.alignment=aln(h="center" if ci==1 else "left",wrap=(ci==2))
             c.border=bdr()
 
-    tr=8+len(rows); ws1.row_dimensions[tr].height=22
-    ws1.merge_cells(f"A{tr}:C{tr}")
-    c=ws1[f"A{tr}"]; c.value="TOTAL PROGRAMME DURATION"
-    c.font=Font(name="Arial",bold=True,color=WHITE,size=10)
-    c.fill=fill(MAROON); c.alignment=aln(h="right"); c.border=mbdr()
+    tr=7+len(rows); ws1.row_dimensions[tr].height=22
     total_mins=sum(r.get('duration',0) for r in rows if isinstance(r.get('duration'),int))
-    c=ws1[f"D{tr}"]; c.value=total_mins
-    c.font=Font(name="Arial",bold=True,color=WHITE,size=12)
-    c.fill=fill(MAROON); c.alignment=aln(); c.border=mbdr()
-    ws1.merge_cells(f"E{tr}:H{tr}")
-    c=ws1[f"E{tr}"]
+    c=ws1[f"A{tr}"]
     c.value=f"Total: {total_mins} mins ({total_mins//60}h {total_mins%60}m)  |  Ends: {rows[-1]['end_str'] if rows else ''}"
     c.font=Font(name="Arial",bold=True,color=GOLD,size=10)
     c.fill=fill(DARK); c.alignment=aln(h="left"); c.border=mbdr()
-    ws1.freeze_panes="A8"
+    ws1.merge_cells(f"A{tr}:B{tr}")
+    ws1.freeze_panes="A7"
 
     # ── Sheet 2: Print View ──
     ws2=wb.create_sheet("Print View")
-    for col,w in {"A":5,"B":35,"C":20,"D":25}.items():
-        ws2.column_dimensions[col].width=w
-    ws2.merge_cells("A1:D1")
+    ws2.column_dimensions["A"].width=22
+    ws2.column_dimensions["B"].width=52
+    ws2.column_dimensions["C"].width=22
+
+    # Header: event info left, logo right
+    ws2.row_dimensions[1].height=28
     c=ws2["A1"]
-    c.value=f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}"
-    c.font=Font(name="Arial",bold=True,color=WHITE,size=16)
-    c.fill=fill(MAROON); c.alignment=aln(); ws2.row_dimensions[1].height=38
-    ws2.merge_cells("A2:D2")
-    c=ws2["A2"]
-    c.value=f"Date: {event_date or '—'}   |   Venue: {venue or '—'}   |   Start: {rows[0]['start_str'] if rows else '—'}"
-    c.font=Font(name="Arial",italic=True,color=GOLD,size=10)
-    c.fill=fill(DARK); c.alignment=aln(); ws2.row_dimensions[2].height=20
-    ws2.row_dimensions[4].height=22
-    for ci,hdr in enumerate(["Sl.","Programme Item / Activity","Time Slot","Remarks / Speaker"],1):
-        c=ws2.cell(row=4,column=ci)
+    c.value=f"M2M Programme for Inaugural of {event_name or 'Event'}"
+    c.font=Font(name="Arial",bold=True,color=WHITE,size=14)
+    c.fill=fill(MAROON); c.alignment=aln(h="left")
+    ws2.merge_cells("A1:B1")
+
+    for di,(lbl,val) in enumerate([
+        ("Event :", event_name or "—"),("Date  :", event_date or "—"),
+        ("Venue :", venue or "—"),("Start Time :", rows[0]["start_str"] if rows else "—")]):
+        r=2+di; ws2.row_dimensions[r].height=18
+        cl=ws2.cell(row=r,column=1); cl.value=lbl
+        cl.font=Font(name="Arial",bold=True,color=MAROON,size=9)
+        cl.fill=fill(LT_GOLD); cl.alignment=aln(h="right")
+        cv=ws2.cell(row=r,column=2); cv.value=val
+        cv.font=Font(name="Arial",color=DARK,size=9)
+        cv.fill=fill(WHITE); cv.border=bdr(); cv.alignment=aln(h="left")
+
+    if logo_bytes:
+        from openpyxl.drawing.image import Image as XLImage
+        try:
+            img2=XLImage(io.BytesIO(logo_bytes))
+            img2.height=88; img2.width=160; img2.anchor="C1"
+            ws2.add_image(img2)
+        except Exception: pass
+
+    ws2.row_dimensions[6].height=22
+    for ci,hdr in enumerate(["Time Slot","Programme Item / Activity"],1):
+        c=ws2.cell(row=6,column=ci)
         c.value=hdr; c.font=Font(name="Arial",bold=True,color=WHITE,size=11)
         c.fill=fill(MAROON); c.alignment=aln(); c.border=bdr()
     for i,row in enumerate(rows):
-        r=5+i; ws2.row_dimensions[r].height=22
+        r=7+i; ws2.row_dimensions[r].height=22
         item=row.get('item',''); cat=get_category(item)
         cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
         bg=cat_hex if cat!="General" else (CREAM if i%2==0 else "FFFFFF")
-        for ci,val in[(1,i+1),(2,item),(3,row.get('slot','')),(4,row.get('remarks',''))]:
+        for ci,val in[(1,row.get('slot','')), (2,item)]:
             c=ws2.cell(row=r,column=ci)
             c.value=val; c.fill=PF("solid",fgColor=bg)
             c.font=fnt(bold=(ci==2 and is_address(item)),
                        color="1A5276" if is_address(item) else DARK)
-            c.alignment=aln(h="left" if ci in[2,4] else "center",wrap=ci in[2,4])
+            c.alignment=aln(h="center" if ci==1 else "left",wrap=(ci==2))
             c.border=bdr()
-    ws2.freeze_panes="A5"
+    ws2.freeze_panes="A7"
 
     # ── Sheet 3: MC Script ──
     ws3=wb.create_sheet("MC Script")
-    for col,w in {"A":5,"B":6,"C":28,"D":18,"E":50,"F":46}.items():
+    for col,w in {"A":22,"B":30,"C":50,"D":46,"E":20}.items():
         ws3.column_dimensions[col].width=w
-    ws3.merge_cells("A1:F1")
-    c=ws3["A1"]; c.value="🎤  MC SCRIPT — Bilingual (English + ಕನ್ನಡ)"
+    # MC header: info left, logo right
+    ws3.row_dimensions[1].height=28
+    c=ws3["A1"]
+    c.value="🎤  MC SCRIPT — Bilingual (English + ಕನ್ನಡ)"
     c.font=Font(name="Arial",bold=True,color=WHITE,size=13)
-    c.fill=fill(MAROON); c.alignment=aln(); ws3.row_dimensions[1].height=30
-    ws3.merge_cells("A2:F2")
-    c=ws3["A2"]
-    c.value=f"Event: {event_name or '—'}   |   Replace [brackets] with actual names before the event"
-    c.font=fnt(italic=True,color="555555",size=9)
-    c.fill=fill(LT_GOLD); c.alignment=aln(h="left"); ws3.row_dimensions[2].height=16
-    ws3.row_dimensions[3].height=26
-    for ci,hdr in enumerate(["#","Sl.","Programme Item","Time Slot","📢 English","📢 ಕನ್ನಡ"],1):
-        c=ws3.cell(row=3,column=ci)
+    c.fill=fill(MAROON); c.alignment=aln(h="left")
+    ws3.merge_cells("A1:D1")
+
+    for di,(lbl,val) in enumerate([
+        ("Event :", event_name or "—"),("Date  :", event_date or "—"),
+        ("Venue :", venue or "—"),("Note  :", "Replace [brackets] with actual names")]):
+        r=2+di; ws3.row_dimensions[r].height=16
+        cl=ws3.cell(row=r,column=1); cl.value=lbl
+        cl.font=Font(name="Arial",bold=True,color=MAROON,size=9)
+        cl.fill=fill(LT_GOLD); cl.alignment=aln(h="right")
+        cv=ws3.cell(row=r,column=2); cv.value=val
+        cv.font=Font(name="Arial",color=DARK,size=9)
+        cv.fill=fill(WHITE); cv.border=bdr(); cv.alignment=aln(h="left")
+        ws3.merge_cells(f"B{r}:D{r}")
+
+    if logo_bytes:
+        from openpyxl.drawing.image import Image as XLImage
+        try:
+            img3=XLImage(io.BytesIO(logo_bytes))
+            img3.height=88; img3.width=160; img3.anchor="E1"
+            ws3.add_image(img3)
+        except Exception: pass
+
+    ws3.row_dimensions[6].height=26
+    for ci,hdr in enumerate(["Time Slot","Programme Item","📢 English","📢 ಕನ್ನಡ"],1):
+        c=ws3.cell(row=6,column=ci)
         c.value=hdr; c.font=Font(name="Arial",bold=True,color=WHITE,size=10)
         c.fill=fill(MAROON); c.alignment=aln(wrap=True); c.border=bdr()
     for i,row in enumerate(rows):
-        r=4+i; ws3.row_dimensions[r].height=90
+        r=7+i; ws3.row_dimensions[r].height=90
         item=row.get('item',''); cat=get_category(item)
         cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
         eng,kan=get_script(item)
         for ci,val,bg2,fs in [
-            (1,i+1,LT_GOLD,fnt(color="999999",size=9)),
-            (2,i+1,cat_hex,fnt(bold=True,color=MAROON)),
-            (3,item,cat_hex,fnt(bold=is_address(item),color=DARK)),
-            (4,row.get('slot',''),LT_GOLD,fnt(bold=True,color=MAROON,size=9)),
-            (5,eng,"F0F7FF" if i%2==0 else "FFFFFF",Font(name="Arial",color="1A1A2E",size=9)),
-            (6,kan,"FFF8F0" if i%2==0 else "FFFFFF",Font(name="Nirmala UI",color="1A1A2E",size=9))]:
+            (1,row.get('slot',''),LT_GOLD,fnt(bold=True,color=MAROON,size=9)),
+            (2,item,cat_hex,fnt(bold=is_address(item),color=DARK)),
+            (3,eng,"F0F7FF" if i%2==0 else "FFFFFF",Font(name="Arial",color="1A1A2E",size=9)),
+            (4,kan,"FFF8F0" if i%2==0 else "FFFFFF",Font(name="Nirmala UI",color="1A1A2E",size=9))]:
             c=ws3.cell(row=r,column=ci)
             c.value=val; c.fill=PF("solid",fgColor=bg2); c.font=fs
-            c.alignment=Alignment(horizontal="left" if ci in[3,5,6] else "center",
-                                  vertical="top" if ci in[5,6] else "center",wrap_text=True)
+            c.alignment=Alignment(horizontal="center" if ci==1 else "left",
+                                  vertical="top" if ci in[3,4] else "center",wrap_text=True)
             c.border=bdr()
-    ws3.freeze_panes="A4"
+    ws3.freeze_panes="A7"
     ws3.page_setup.orientation="landscape"
 
     buf=io.BytesIO(); wb.save(buf); buf.seek(0)
@@ -732,13 +853,12 @@ if rows:
             addr  = is_address(row['item'])
             st.markdown(f"""
             <div style="display:flex;align-items:center;padding:8px 14px;
-                        background:{color};border-radius:6px;margin:4px 0;
-                        border-left:4px solid {'#1A5276' if addr else '#C9A84C'}">
-                <span style="min-width:28px;font-weight:bold;color:#7B1B1B">{i+1}.</span>
-                <span style="flex:1;font-weight:{'bold' if addr else 'normal'};
+                        background:{'#F9F9F9' if i%2==0 else '#FFFFFF'};
+                        border-radius:4px;margin:2px 0;
+                        border:1px solid #E0E0E0;">
+                <span class="time-pill" style="min-width:160px;text-align:center">{row['slot']}</span>
+                <span style="flex:1;margin-left:14px;font-weight:{'bold' if addr else 'normal'};
                              color:{'#1A5276' if addr else '#2C2C2C'}">{row['item']}</span>
-                <span style="margin:0 12px;color:#888;font-size:0.82rem">{row['duration']} min</span>
-                <span class="time-pill">{row['slot']}</span>
             </div>""", unsafe_allow_html=True)
 
     with tab2:
@@ -769,11 +889,9 @@ if rows:
         st.divider()
         st.dataframe(
             pd.DataFrame([{
-                "Sl.": i+1,
-                "Programme Item": r['item'],
                 "Time Slot": r['slot'],
-                "Remarks": r.get('remarks','')
-            } for i,r in enumerate(rows)]),
+                "Programme Item": r['item'],
+            } for r in rows]),
             use_container_width=True, hide_index=True, height=460)
 
     # ── Downloads ─────────────────────────────────────────────────────────────

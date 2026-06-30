@@ -2,7 +2,7 @@
 cd "$(dirname "$0")"
 echo ""
 echo "================================"
-echo "  M2M Programme Planner"
+echo "  M2M Programme Planner v4"
 echo "================================"
 echo ""
 if ! command -v python3 &>/dev/null; then
