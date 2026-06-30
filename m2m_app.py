@@ -255,13 +255,16 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None):
             tcPr.append(tcBorders)
 
         def light_borders(cell):
+            """
+            Sets borders to 'nil' so the table has NO visible printed borders —
+            matching Word's 'View Gridlines' mode (faint on-screen guide only,
+            invisible when printed or exported to PDF).
+            """
             tc = cell._tc; tcPr = tc.get_or_add_tcPr()
             tcBorders = OxmlElement('w:tcBorders')
             for side in ['top','left','bottom','right']:
                 el = OxmlElement(f'w:{side}')
-                el.set(qn('w:val'),'single')
-                el.set(qn('w:sz'),'4')
-                el.set(qn('w:color'),'CCCCCC')
+                el.set(qn('w:val'),'nil')
                 tcBorders.append(el)
             tcPr.append(tcBorders)
 
@@ -429,17 +432,18 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
 
     # ── Header: Left = event info, Right = logo ──
     # Row 1: Event Name (A1) | Logo (C1 spanning down)
-    ws1.row_dimensions[1].height = 28
-    ws1.row_dimensions[2].height = 22
-    ws1.row_dimensions[3].height = 22
-    ws1.row_dimensions[4].height = 22
+    ws1.row_dimensions[1].height = 26
+    ws1.row_dimensions[2].height = 18
+    ws1.row_dimensions[3].height = 18
+    ws1.row_dimensions[4].height = 18
 
     # Event name — left side
     c=ws1["A1"]
-    c.value = f"M2M PROGRAMME FOR {(event_name or 'INAUGURAL').upper()}"
+    c.value = f"M2M Programme for Inaugural of {event_name or 'Event'}"
     c.font=Font(name="Arial",bold=True,color=WHITE,size=14)
     c.fill=fill(MAROON); c.alignment=aln(h="left")
     ws1.merge_cells("A1:B1")
+    c2=ws1["C1"]; c2.fill=fill(MAROON)
 
     # Event details rows
     details_rows = [
@@ -450,7 +454,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
     ]
     for di, (lbl, val) in enumerate(details_rows):
         r = 2 + di
-        ws1.row_dimensions[r].height = 18
+        ws1.row_dimensions[r].height = 18  # kept tight to match logo block
         cl = ws1.cell(row=r, column=1)
         cl.value = lbl
         cl.font = Font(name="Arial",bold=True,color=MAROON,size=9)
@@ -461,14 +465,15 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
         cv.fill = fill(WHITE); cv.border = bdr()
         cv.alignment = aln(h="left")
 
-    # Logo — right side (col C, rows 1-4)
+    # Logo — right side (col C), sized to match the 4-row header block exactly
     if logo_bytes:
         from openpyxl.drawing.image import Image as XLImage
         try:
             img = XLImage(io.BytesIO(logo_bytes))
-            img.height = 88; img.width = 160; img.anchor = "C1"
+            # Header block total height = row1(28)+row2-4(18*3)=82pt ≈ 109px (1pt=1.333px)
+            img.height = 95; img.width = 170; img.anchor = "C1"
             ws1.add_image(img)
-            ws1.column_dimensions["C"].width = 22
+            ws1.column_dimensions["C"].width = 24
         except Exception:
             pass
 
@@ -483,15 +488,13 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
     from openpyxl.styles import PatternFill as PF
     for i,row in enumerate(rows):
         r=7+i; ws1.row_dimensions[r].height=22
-        item=row.get('item',''); cat=get_category(item)
-        cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
-        alt=CREAM if i%2==0 else "FFFFFF"; bg=cat_hex if cat!="General" else alt
+        item=row.get('item',''); addr=is_address(item)
         for ci,val,bg2,fs in [
-            (1,row.get('slot',''),LT_GOLD,Font(name="Arial",bold=True,color=MAROON,size=10)),
-            (2,item,bg,fnt(color=DARK,bold=is_address(item)))]:
+            (1,row.get('slot',''),"FFFFFF",fnt(color=DARK)),
+            (2,item,"FFFFFF",fnt(color=DARK,bold=addr))]:
             c=ws1.cell(row=r,column=ci)
             c.value=val; c.fill=PF("solid",fgColor=bg2); c.font=fs
-            c.alignment=aln(h="center" if ci==1 else "left",wrap=(ci==2))
+            c.alignment=aln(h="left" if ci==1 else "left",wrap=(ci==2))
             c.border=bdr()
 
     tr=7+len(rows); ws1.row_dimensions[tr].height=22
@@ -510,7 +513,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
     ws2.column_dimensions["C"].width=22
 
     # Header: event info left, logo right
-    ws2.row_dimensions[1].height=28
+    ws2.row_dimensions[1].height=26
     c=ws2["A1"]
     c.value=f"M2M Programme for Inaugural of {event_name or 'Event'}"
     c.font=Font(name="Arial",bold=True,color=WHITE,size=14)
@@ -532,8 +535,9 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
         from openpyxl.drawing.image import Image as XLImage
         try:
             img2=XLImage(io.BytesIO(logo_bytes))
-            img2.height=88; img2.width=160; img2.anchor="C1"
+            img2.height=95; img2.width=170; img2.anchor="C1"
             ws2.add_image(img2)
+            ws2.column_dimensions["C"].width=24
         except Exception: pass
 
     ws2.row_dimensions[6].height=22
@@ -544,14 +548,11 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
     for i,row in enumerate(rows):
         r=7+i; ws2.row_dimensions[r].height=22
         item=row.get('item',''); cat=get_category(item)
-        cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
-        bg=cat_hex if cat!="General" else (CREAM if i%2==0 else "FFFFFF")
         for ci,val in[(1,row.get('slot','')), (2,item)]:
             c=ws2.cell(row=r,column=ci)
-            c.value=val; c.fill=PF("solid",fgColor=bg)
-            c.font=fnt(bold=(ci==2 and is_address(item)),
-                       color="1A5276" if is_address(item) else DARK)
-            c.alignment=aln(h="center" if ci==1 else "left",wrap=(ci==2))
+            c.value=val; c.fill=PF("solid",fgColor="FFFFFF")
+            c.font=fnt(bold=(ci==2 and is_address(item)), color=DARK)
+            c.alignment=aln(h="left" if ci==1 else "left",wrap=(ci==2))
             c.border=bdr()
     ws2.freeze_panes="A7"
 
@@ -560,7 +561,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
     for col,w in {"A":22,"B":30,"C":50,"D":46,"E":20}.items():
         ws3.column_dimensions[col].width=w
     # MC header: info left, logo right
-    ws3.row_dimensions[1].height=28
+    ws3.row_dimensions[1].height=26
     c=ws3["A1"]
     c.value="🎤  MC SCRIPT — Bilingual (English + ಕನ್ನಡ)"
     c.font=Font(name="Arial",bold=True,color=WHITE,size=13)
@@ -583,7 +584,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
         from openpyxl.drawing.image import Image as XLImage
         try:
             img3=XLImage(io.BytesIO(logo_bytes))
-            img3.height=88; img3.width=160; img3.anchor="E1"
+            img3.height=95; img3.width=170; img3.anchor="E1"
             ws3.add_image(img3)
         except Exception: pass
 
@@ -595,13 +596,12 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None):
     for i,row in enumerate(rows):
         r=7+i; ws3.row_dimensions[r].height=90
         item=row.get('item',''); cat=get_category(item)
-        cat_hex=CAT_COLORS.get(cat,"#FFFFFF").lstrip("#")
         eng,kan=get_script(item)
         for ci,val,bg2,fs in [
-            (1,row.get('slot',''),LT_GOLD,fnt(bold=True,color=MAROON,size=9)),
-            (2,item,cat_hex,fnt(bold=is_address(item),color=DARK)),
-            (3,eng,"F0F7FF" if i%2==0 else "FFFFFF",Font(name="Arial",color="1A1A2E",size=9)),
-            (4,kan,"FFF8F0" if i%2==0 else "FFFFFF",Font(name="Nirmala UI",color="1A1A2E",size=9))]:
+            (1,row.get('slot',''),"FFFFFF",fnt(bold=True,color=MAROON,size=9)),
+            (2,item,"FFFFFF",fnt(bold=is_address(item),color=DARK)),
+            (3,eng,"FFFFFF",Font(name="Arial",color="1A1A2E",size=9)),
+            (4,kan,"FFFFFF",Font(name="Nirmala UI",color="1A1A2E",size=9))]:
             c=ws3.cell(row=r,column=ci)
             c.value=val; c.fill=PF("solid",fgColor=bg2); c.font=fs
             c.alignment=Alignment(horizontal="center" if ci==1 else "left",
