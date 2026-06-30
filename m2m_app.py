@@ -209,286 +209,199 @@ def safe_filename(name):
 # ── Word doc export ───────────────────────────────────────────────────────────
 def build_word(event_name, event_date, venue, rows, logo_bytes=None):
     """
-    Generates a clean Word doc matching the BTS 2023 MC Copy format:
-    - Logo centred at top (if provided)
-    - Title in maroon, centred
-    - Date/venue line in grey, centred
-    - Clean 3-col table: Timings | : | Programme Details
-    - No colour fills — pure black & white
-    - MC Script on page 2
-    Uses Node.js docx library for reliable output.
+    Generates a clean Word doc using python-docx (no Node.js dependency —
+    guaranteed to work on Streamlit Cloud and locally).
+    Layout: logo (left, large) + title + date/venue/start line,
+    clean white Timings | : | Programme Details table,
+    MC Script starts on page 2.
     """
-    import subprocess, json, base64, tempfile, os
-
-    # Build script data
-    script_rows = []
-    for row in rows:
-        eng, kan = get_script(row['item'])
-        script_rows.append({
-            'slot':     row['slot'],
-            'item':     row['item'],
-            'eng_lines': [l for l in eng.split('\n') if l.strip() or True],
-            'kan_lines': [l for l in kan.split('\n') if l.strip() or True],
-        })
-
-    payload = {
-        'event_name': event_name or 'INAUGURAL',
-        'event_date': event_date or '',
-        'venue':      venue or '',
-        'start_time': rows[0]['start_str'] if rows else '',
-        'total_mins': sum(r['duration'] for r in rows),
-        'end_time':   rows[-1]['end_str'] if rows else '',
-        'rows':       script_rows,
-        'logo_b64':   base64.b64encode(logo_bytes).decode() if logo_bytes else '',
-    }
-
-    js_script = r"""
-const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-        AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
-        PageBreak, ImageRun } = require('docx');
-const fs = require('fs');
-
-const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-
-const thinBorder = { style: BorderStyle.SINGLE, size: 4, color: "CCCCCC" };
-const noBorder   = { style: BorderStyle.NIL, size: 0, color: "FFFFFF" };
-const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder, insideH: thinBorder, insideV: thinBorder };
-const noBorders  = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
-const hdrBorder  = { style: BorderStyle.SINGLE, size: 6, color: "999999" };
-const hdrBorders = { top: hdrBorder, bottom: hdrBorder, left: hdrBorder, right: hdrBorder, insideH: hdrBorder, insideV: hdrBorder };
-
-const children = [];
-
-// ── Logo (centred, above title) ──
-if (data.logo_b64) {
-    const logoBuffer = Buffer.from(data.logo_b64, 'base64');
-    children.push(new Paragraph({
-        alignment: AlignmentType.LEFT,
-        spacing: { before: 0, after: 100 },
-        children: [new ImageRun({
-            data: logoBuffer,
-            transformation: { width: 320, height: 120 },
-            type: 'png',
-        })]
-    }));
-}
-
-// ── Title ──
-const titleLine = `M2M Programme for Inaugural of ${data.event_name}`;
-children.push(new Paragraph({
-    alignment: AlignmentType.LEFT,
-    spacing: { before: 0, after: 60 },
-    children: [new TextRun({ text: titleLine, bold: true, font: "Arial", size: 28, color: "7B1B1B" })]
-}));
-
-// ── Date / Venue line ──
-const detailParts = [];
-if (data.event_date) detailParts.push("Date: " + data.event_date);
-if (data.venue)      detailParts.push("Venue: " + data.venue);
-if (data.start_time) detailParts.push("Start Time: " + data.start_time);
-children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 0, after: 240 },
-    children: [new TextRun({ text: detailParts.join(' | '), font: "Arial", size: 18, color: "555555" })]
-}));
-
-// ── Programme table ──
-const headerRow = new TableRow({
-    tableHeader: true,
-    children: [
-        new TableCell({
-            width: { size: 2400, type: WidthType.DXA },
-            borders: hdrBorders,
-            shading: { fill: "F5F5F5", type: ShadingType.CLEAR },
-            margins: { top: 80, bottom: 80, left: 120, right: 80 },
-            children: [new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: "Timings", bold: true, font: "Arial", size: 20 })]
-            })]
-        }),
-        new TableCell({
-            width: { size: 360, type: WidthType.DXA },
-            borders: hdrBorders,
-            shading: { fill: "F5F5F5", type: ShadingType.CLEAR },
-            margins: { top: 80, bottom: 80, left: 60, right: 60 },
-            children: [new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: " ", font: "Arial", size: 20 })]
-            })]
-        }),
-        new TableCell({
-            width: { size: 6400, type: WidthType.DXA },
-            borders: hdrBorders,
-            shading: { fill: "F5F5F5", type: ShadingType.CLEAR },
-            margins: { top: 80, bottom: 80, left: 120, right: 80 },
-            children: [new Paragraph({
-                children: [new TextRun({ text: "Programme Details", bold: true, font: "Arial", size: 20 })]
-            })]
-        }),
-    ]
-});
-
-const dataRows = data.rows.map((row, i) => new TableRow({
-    children: [
-        new TableCell({
-            width: { size: 2400, type: WidthType.DXA },
-            borders: allBorders,
-            verticalAlign: VerticalAlign.TOP,
-            margins: { top: 80, bottom: 80, left: 120, right: 80 },
-            children: [new Paragraph({
-                alignment: AlignmentType.LEFT,
-                spacing: { before: 0, after: 0 },
-                children: [new TextRun({ text: row.slot, font: "Arial", size: 18 })]
-            })]
-        }),
-        new TableCell({
-            width: { size: 360, type: WidthType.DXA },
-            borders: allBorders,
-            verticalAlign: VerticalAlign.TOP,
-            margins: { top: 80, bottom: 80, left: 60, right: 60 },
-            children: [new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 0, after: 0 },
-                children: [new TextRun({ text: ":", font: "Arial", size: 18 })]
-            })]
-        }),
-        new TableCell({
-            width: { size: 6400, type: WidthType.DXA },
-            borders: allBorders,
-            verticalAlign: VerticalAlign.TOP,
-            margins: { top: 80, bottom: 80, left: 120, right: 80 },
-            children: [new Paragraph({
-                spacing: { before: 0, after: 0 },
-                children: [new TextRun({ text: row.item, font: "Arial", size: 18 })]
-            })]
-        }),
-    ]
-}));
-
-children.push(new Table({
-    width: { size: 9160, type: WidthType.DXA },
-    columnWidths: [2400, 360, 6400],
-    rows: [headerRow, ...dataRows],
-}));
-
-// ── Total line ──
-children.push(new Paragraph({
-    alignment: AlignmentType.RIGHT,
-    spacing: { before: 100, after: 0 },
-    children: [new TextRun({
-        text: `Total: ${data.total_mins} mins (${Math.floor(data.total_mins/60)}h ${data.total_mins%60}m)  |  Programme ends at ${data.end_time}`,
-        font: "Arial", size: 16, italics: true, color: "555555"
-    })]
-}));
-
-// ── Page break → MC Script ──
-children.push(new Paragraph({ children: [new PageBreak()] }));
-
-// ── MC Script heading ──
-children.push(new Paragraph({
-    spacing: { before: 0, after: 160 },
-    children: [new TextRun({ text: "MC SCRIPT — Bilingual (English + ಕನ್ನಡ)", bold: true, font: "Arial", size: 24, color: "7B1B1B" })]
-}));
-children.push(new Paragraph({
-    spacing: { before: 0, after: 300 },
-    children: [new TextRun({
-        text: "Replace all text in [brackets] with actual names/designations before the event.",
-        font: "Arial", size: 18, italics: true, color: "888888"
-    })]
-}));
-
-// ── MC Script entries ──
-data.rows.forEach((row, i) => {
-    children.push(new Paragraph({
-        spacing: { before: 240, after: 60 },
-        children: [
-            new TextRun({ text: `${i+1}.  ${row.item}`, bold: true, font: "Arial", size: 20, color: "7B1B1B" }),
-            new TextRun({ text: `  —  ${row.slot}`, font: "Arial", size: 18, color: "555555" }),
-        ]
-    }));
-
-    const scriptTable = new Table({
-        width: { size: 9160, type: WidthType.DXA },
-        columnWidths: [4580, 4580],
-        rows: [new TableRow({
-            children: [
-                new TableCell({
-                    width: { size: 4580, type: WidthType.DXA },
-                    borders: allBorders,
-                    shading: { fill: "FFFFFF", type: ShadingType.CLEAR },
-                    margins: { top: 80, bottom: 80, left: 120, right: 120 },
-                    children: [
-                        new Paragraph({ spacing: { before:0, after:60 },
-                            children:[new TextRun({ text:"📢 English", bold:true, font:"Arial", size:18, color:"1A5276" })] }),
-                        ...row.eng_lines.map(line => new Paragraph({
-                            spacing: { before:0, after:40 },
-                            children:[new TextRun({ text: line, font:"Arial", size:17 })]
-                        }))
-                    ]
-                }),
-                new TableCell({
-                    width: { size: 4580, type: WidthType.DXA },
-                    borders: allBorders,
-                    shading: { fill: "FFFFFF", type: ShadingType.CLEAR },
-                    margins: { top: 80, bottom: 80, left: 120, right: 120 },
-                    children: [
-                        new Paragraph({ spacing: { before:0, after:60 },
-                            children:[new TextRun({ text:"📢 ಕನ್ನಡ", bold:true, font:"Nirmala UI", size:18, color:"7B5200" })] }),
-                        ...row.kan_lines.map(line => new Paragraph({
-                            spacing: { before:0, after:40 },
-                            children:[new TextRun({ text: line, font:"Nirmala UI", size:17 })]
-                        }))
-                    ]
-                }),
-            ]
-        })]
-    });
-    children.push(scriptTable);
-});
-
-const doc = new Document({
-    sections: [{
-        properties: {
-            page: {
-                size: { width: 11906, height: 16838 },
-                margin: { top: 720, right: 720, bottom: 720, left: 720 }
-            }
-        },
-        children
-    }]
-});
-
-Packer.toBuffer(doc).then(buf => {
-    fs.writeFileSync(process.argv[3], buf);
-});
-"""
+    try:
+        from docx import Document as DocxDoc
+        from docx.shared import Pt, RGBColor, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_ALIGN_VERTICAL
+        from docx.enum.section import WD_SECTION
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+    except ImportError as e:
+        return None, f"python-docx not available: {e}"
 
     try:
-        # Write payload to temp file
-        tmp_dir  = tempfile.mkdtemp()
-        data_path = os.path.join(tmp_dir, 'data.json')
-        out_path  = os.path.join(tmp_dir, 'output.docx')
-        js_path   = os.path.join(tmp_dir, 'build.js')
+        doc = DocxDoc()
+        for section in doc.sections:
+            section.top_margin = Cm(1.6)
+            section.bottom_margin = Cm(1.6)
+            section.left_margin = Cm(1.8)
+            section.right_margin = Cm(1.8)
 
-        with open(data_path, 'w', encoding='utf-8') as f:
-            json.dump(payload, f, ensure_ascii=False)
-        with open(js_path, 'w', encoding='utf-8') as f:
-            f.write(js_script)
+        def rgb(hex_str):
+            h = hex_str.lstrip('#')
+            return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
 
-        result = subprocess.run(
-            ['node', js_path, data_path, out_path],
-            capture_output=True, text=True, timeout=30
+        def set_cell_bg(cell, hex_color):
+            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'),'clear'); shd.set(qn('w:color'),'auto')
+            shd.set(qn('w:fill'), hex_color)
+            tcPr.append(shd)
+
+        def no_borders_table(cell):
+            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
+            tcBorders = OxmlElement('w:tcBorders')
+            for side in ['top','left','bottom','right']:
+                el = OxmlElement(f'w:{side}')
+                el.set(qn('w:val'),'nil')
+                tcBorders.append(el)
+            tcPr.append(tcBorders)
+
+        def light_borders(cell):
+            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
+            tcBorders = OxmlElement('w:tcBorders')
+            for side in ['top','left','bottom','right']:
+                el = OxmlElement(f'w:{side}')
+                el.set(qn('w:val'),'single')
+                el.set(qn('w:sz'),'4')
+                el.set(qn('w:color'),'CCCCCC')
+                tcBorders.append(el)
+            tcPr.append(tcBorders)
+
+        # ── Header: logo (left, large) + title beside it ──
+        if logo_bytes:
+            hdr_tbl = doc.add_table(rows=1, cols=2)
+            logo_cell, title_cell = hdr_tbl.rows[0].cells
+            logo_cell.width = Cm(5.0); title_cell.width = Cm(11.6)
+            no_borders_table(logo_cell); no_borders_table(title_cell)
+
+            lp = logo_cell.paragraphs[0]
+            lp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            lr = lp.add_run()
+            lr.add_picture(io.BytesIO(logo_bytes), width=Cm(4.5))
+
+            tp = title_cell.paragraphs[0]
+            tp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            tr = tp.add_run(f"M2M Programme for Inaugural of {event_name or 'Event'}")
+            tr.bold = True; tr.font.size = Pt(20); tr.font.color.rgb = rgb("7B1B1B")
+        else:
+            title_para = doc.add_paragraph()
+            title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            tr = title_para.add_run(f"M2M Programme for Inaugural of {event_name or 'Event'}")
+            tr.bold = True; tr.font.size = Pt(20); tr.font.color.rgb = rgb("7B1B1B")
+
+        # ── Date / Venue / Start Time line ──
+        details = []
+        if event_date: details.append(f"Date: {event_date}")
+        if venue:      details.append(f"Venue: {venue}")
+        if rows:       details.append(f"Start Time: {rows[0]['start_str']}")
+        if details:
+            det_para = doc.add_paragraph("  |  ".join(details))
+            det_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            for run in det_para.runs:
+                run.font.size = Pt(10); run.font.color.rgb = rgb("555555")
+
+        doc.add_paragraph()
+
+        # ── Programme table: Timings | : | Programme Details ──
+        table = doc.add_table(rows=1, cols=3)
+        table.autofit = False
+        col_widths = [Cm(3.6), Cm(0.6), Cm(11.4)]
+
+        hdr = table.rows[0]
+        for j, (cell, text) in enumerate(zip(hdr.cells, ["Timings","","Programme Details"])):
+            cell.width = col_widths[j]
+            light_borders(cell)
+            set_cell_bg(cell, "F5F5F5")
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER if j!=2 else WD_ALIGN_PARAGRAPH.LEFT
+            if text:
+                run = p.add_run(text)
+                run.bold = True; run.font.size = Pt(10); run.font.color.rgb = rgb("2C2C2C")
+
+        for row in rows:
+            tr_row = table.add_row()
+            values = [row['slot'], ':', row['item']]
+            for j, (cell, text) in enumerate(zip(tr_row.cells, values)):
+                cell.width = col_widths[j]
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+                light_borders(cell)
+                set_cell_bg(cell, "FFFFFF")
+                p = cell.paragraphs[0]
+                run = p.add_run(text)
+                run.font.size = Pt(10)
+                if j == 0:
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    run.font.color.rgb = rgb("2C2C2C")
+                elif j == 1:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    run.font.color.rgb = rgb("888888")
+                else:
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    run.bold = is_address(row['item'])
+                    run.font.color.rgb = rgb("2C2C2C")
+
+        # ── Total line ──
+        total_mins = sum(r['duration'] for r in rows)
+        tot_para = doc.add_paragraph()
+        tot_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        tr_run = tot_para.add_run(
+            f"Total: {total_mins} mins ({total_mins//60}h {total_mins%60}m)  |  "
+            f"Programme ends at {rows[-1]['end_str']}"
         )
-        if result.returncode != 0:
-            return None, f"JS error: {result.stderr[:300]}"
+        tr_run.italic = True; tr_run.font.size = Pt(9); tr_run.font.color.rgb = rgb("555555")
 
-        with open(out_path, 'rb') as f:
-            buf = io.BytesIO(f.read())
+        # ── Page break → MC Script ──
+        doc.add_page_break()
+
+        mc_heading = doc.add_paragraph()
+        hr = mc_heading.add_run("MC Script — Bilingual (English + ಕನ್ನಡ)")
+        hr.bold = True; hr.font.size = Pt(16); hr.font.color.rgb = rgb("7B1B1B")
+
+        note = doc.add_paragraph()
+        nr = note.add_run("Replace all text in [brackets] with actual names/designations before the event.")
+        nr.italic = True; nr.font.size = Pt(9); nr.font.color.rgb = rgb("888888")
+        doc.add_paragraph()
+
+        for i, row in enumerate(rows):
+            eng, kan = get_script(row['item'])
+
+            item_para = doc.add_paragraph()
+            ir = item_para.add_run(f"{i+1}.  {row['item']}")
+            ir.bold = True; ir.font.size = Pt(11)
+            ir.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb("7B1B1B")
+            sr = item_para.add_run(f"   —   {row['slot']}")
+            sr.font.size = Pt(10); sr.font.color.rgb = rgb("555555")
+
+            sc_table = doc.add_table(rows=1, cols=2)
+            sc_table.autofit = False
+            cells = sc_table.rows[0].cells
+            cells[0].width = Cm(7.7); cells[1].width = Cm(7.7)
+
+            light_borders(cells[0]); light_borders(cells[1])
+            set_cell_bg(cells[0], "FFFFFF")
+            set_cell_bg(cells[1], "FFFFFF")
+
+            p_eng = cells[0].paragraphs[0]
+            lbl_e = p_eng.add_run("English\n")
+            lbl_e.bold = True; lbl_e.font.size = Pt(9); lbl_e.font.color.rgb = rgb("1A5276")
+            body_e = p_eng.add_run(eng)
+            body_e.font.size = Pt(9)
+
+            p_kan = cells[1].paragraphs[0]
+            lbl_k = p_kan.add_run("ಕನ್ನಡ\n")
+            lbl_k.bold = True; lbl_k.font.size = Pt(9); lbl_k.font.color.rgb = rgb("7B5200")
+            body_k = p_kan.add_run(kan)
+            body_k.font.size = Pt(9)
+            body_k.font.name = "Nirmala UI"
+
+            doc.add_paragraph()
+
+        buf = io.BytesIO()
+        doc.save(buf)
         buf.seek(0)
         return buf, None
 
     except Exception as e:
-        return None, str(e)
+        import traceback
+        return None, f"{type(e).__name__}: {e}\n{traceback.format_exc()[-500:]}"
 
 
 # ── Excel export ──────────────────────────────────────────────────────────────
@@ -927,7 +840,7 @@ if rows:
             st.markdown('</div>', unsafe_allow_html=True)
             st.caption("Includes Programme table + bilingual MC Script")
         else:
-            st.warning(f"Word export unavailable: run `pip install python-docx` to enable")
+            st.error(f"Word export failed: {word_err}")
 
 else:
     st.info("👆 Add programme items and durations above to generate your schedule.")
