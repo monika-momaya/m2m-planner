@@ -56,3 +56,27 @@ LOCAL:
 STREAMLIT CLOUD:
   Upload m2m_app.py + requirements.txt to GitHub
   Deploy at share.streamlit.io
+
+==========================================
+NEW: AUTOMATIC NAME EXTRACTION FOR MC SCRIPT
+==========================================
+The MC Script now automatically pulls the speaker's Name + full
+Designation directly from your programme item text and inserts it
+into the script — in real time, no manual editing needed.
+
+Example:
+  Programme Item: "Biotechnology Industry perspective by Dr. Kiran
+                    Mazumdar Shaw, Chairperson, Vision Group on
+                    Biotechnology, Government of Karnataka"
+
+  MC Script (English): "We will now hear the perspective from
+                         Dr. Kiran Mazumdar Shaw, Chairperson,
+                         Vision Group on Biotechnology, Government
+                         of Karnataka."
+
+This works for ANY item with the pattern "... by <Name>, <Designation>"
+— across both English and the regional language (Kannada/Hindi).
+
+If an item has no detectable "by <Name>" pattern (e.g. "Words of
+Thanks", "Cultural Programme"), the generic [Name]/[Designation]
+placeholder template is used as before — the MC fills it in manually.
