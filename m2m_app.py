@@ -438,6 +438,34 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
                 run.font.color.rgb = rgb("2C2C2C")
                 run.font.name = "Calibri"
 
+        import re as _re_word
+
+        def _bold_name_spans(item_text):
+            """Find name spans (after 'by ' or with titles like Dr./Shri/Smt.) to bold in the item text."""
+            spans = []
+            by_matches = list(_re_word.finditer(r'\bby\b', item_text, flags=_re_word.IGNORECASE))
+            if by_matches:
+                start = by_matches[-1].end()
+                rest = item_text[start:]
+                m = _re_word.match(r'\s*([^,]+)', rest)
+                if m:
+                    name_start = start + m.start(1)
+                    name_end = start + m.end(1)
+                    spans.append((name_start, name_end))
+            title_pattern = _re_word.compile(
+                r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['']?ble|Sri)\s+[A-Z][A-Za-z.]*(?:\s+[A-Z][A-Za-z.]*)*"
+            )
+            for m in title_pattern.finditer(item_text):
+                spans.append((m.start(), m.end()))
+            spans.sort()
+            merged = []
+            for s, e in spans:
+                if merged and s <= merged[-1][1]:
+                    merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+                else:
+                    merged.append((s, e))
+            return merged
+
         for row in rows:
             tr_row = table.add_row()
             values = [row["slot"], ":", row["item"]]
@@ -449,18 +477,40 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
                 p.paragraph_format.space_before = Pt(3)
                 p.paragraph_format.space_after = Pt(3)
                 p.paragraph_format.line_spacing = 1.0
-                run = p.add_run(text)
-                run.font.size = Pt(12)
-                run.font.name = "Calibri"
-                if j == 0:
+
+                if j == 2:
+                    spans = _bold_name_spans(text)
+                    if spans:
+                        pos = 0
+                        for s, e in spans:
+                            if s > pos:
+                                r_ = p.add_run(text[pos:s])
+                                r_.font.size = Pt(12); r_.font.name = "Calibri"
+                                r_.font.color.rgb = rgb("2C2C2C")
+                            r_bold = p.add_run(text[s:e])
+                            r_bold.font.size = Pt(12); r_bold.font.name = "Calibri"
+                            r_bold.font.color.rgb = rgb("2C2C2C")
+                            r_bold.bold = True
+                            pos = e
+                        if pos < len(text):
+                            r_ = p.add_run(text[pos:])
+                            r_.font.size = Pt(12); r_.font.name = "Calibri"
+                            r_.font.color.rgb = rgb("2C2C2C")
+                    else:
+                        run = p.add_run(text)
+                        run.font.size = Pt(12); run.font.name = "Calibri"
+                        run.font.color.rgb = rgb("2C2C2C")
                     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    run.font.color.rgb = rgb("2C2C2C")
-                elif j == 1:
-                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    run.font.color.rgb = rgb("888888")
                 else:
-                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    run.font.color.rgb = rgb("2C2C2C")
+                    run = p.add_run(text)
+                    run.font.size = Pt(12)
+                    run.font.name = "Calibri"
+                    if j == 0:
+                        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        run.font.color.rgb = rgb("2C2C2C")
+                    else:
+                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        run.font.color.rgb = rgb("888888")
 
         section = doc.sections[0]
         footer = section.footer
