@@ -187,7 +187,6 @@ SCRIPTS = [
      "ಈಗ [ಹೆಸರು], [ಹುದ್ದೆ] ಅವರಿಂದ ಭಾಷಣ ನಡೆಯಲಿದೆ.\n[ಹೆಸರು] ಅವರನ್ನು ಮುಂದೆ ಬರಲು ವಿನಂತಿಸುತ್ತೇವೆ.",
      "अब [नाम], [पदनाम] द्वारा संबोधन होगा।\nहम [नाम] से मंच पर पधारने का अनुरोध करते हैं।\n[भाषण के पश्चात] धन्यवाद, [नाम]।"),
 ]
-
 LANGUAGE_OPTIONS = {
     "English + ಕನ್ನಡ (Kannada)": {"code": "kan", "label": "ಕನ್ನಡ", "font": "Nirmala UI"},
     "English + हिन्दी (Hindi)": {"code": "hin", "label": "हिन्दी", "font": "Nirmala UI"},
@@ -504,7 +503,6 @@ def extract_all_names(rows):
         if not item:
             continue
 
-        # Method 1: "by" extraction
         by_matches = list(by_pattern.finditer(item))
         if by_matches:
             rest = item[by_matches[-1].end():].strip().rstrip('.')
@@ -518,7 +516,6 @@ def extract_all_names(rows):
                     seen.add(name_part.lower())
                     results.append((name_part, desig, item))
 
-        # Method 2: title-based scan
         for m in title_pattern.finditer(item):
             fragment = item[m.start():]
             stop = _re2.search(r'\b(?:and|followed by|who|will|to|for)\b', fragment, _re2.I)
@@ -547,7 +544,7 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
     Full MC Document with three sections:
       Page 1  — Dignitaries on the Dais
       Page 2+ — Bilingual MC Script (English + regional)
-      Final   — Notes (only items that have a Remarks/Speaker entry)
+      Final   — Notes
     """
     try:
         from docx import Document as DocxDoc
@@ -714,8 +711,7 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
             body_k = p_kan.add_run(kan)
             body_k.font.size = Pt(9); body_k.font.name = 'Nirmala UI'
 
-        notes_rows = [(r['item'], r.get('remarks','')) for r in rows
-                      if r.get('remarks','').strip()]
+        notes_rows = [(r['item'], r.get('remarks','')) for r in rows if r.get('remarks','').strip()]
 
         if notes_rows:
             doc.add_page_break()
@@ -1003,6 +999,51 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### ⚙️ Event Details")
+    event_name = st.text_input("Event Name", placeholder="e.g. BTS 2025 Inauguration")
+    event_date = st.text_input("Event Date", placeholder="e.g. 15-Aug-2025")
+    venue = st.text_input("Venue", placeholder="e.g. Taj Vivanta, Bengaluru")
+    start_time = st.text_input("Start Time", value="10:00 AM")
+
+    st.markdown("---")
+    st.markdown("### 🗣️ MC Script Language")
+    lang_choice = st.radio(
+        "Bilingual pairing for MC Script",
+        options=list(LANGUAGE_OPTIONS.keys()),
+        index=0,
+        help="Choose the regional language to pair with English for this event"
+    )
+    lang_code = LANGUAGE_OPTIONS[lang_choice]["code"]
+    lang_label = LANGUAGE_OPTIONS[lang_choice]["label"]
+
+    st.markdown("---")
+    st.markdown("### 🖼️ Event Logo")
+    logo_file = st.file_uploader(
+        "Upload logo (PNG or JPG)",
+        type=["png","jpg","jpeg"],
+        help="Logo will appear in downloaded Excel and Word files"
+    )
+    logo_bytes = logo_file.read() if logo_file else None
+
+    st.markdown("---")
+    st.markdown("### ℹ️ How to use")
+    st.markdown("""
+1. Fill event details above
+2. Upload logo (optional)
+3. Add programme items + durations
+4. Download Excel or Word
+""")
+    st.markdown("---")
+    st.markdown("**Category colours:**")
+    for cat, color in CAT_COLORS.items():
+        if cat != "General":
+            st.markdown(
+                f"<span style='background:{color};padding:2px 8px;"
+                f"border-radius:4px;font-size:0.78rem;color:#2C2C2C'>{cat}</span><br>",
+                unsafe_allow_html=True)
 
 def normalize_rows(rows):
     out = []
