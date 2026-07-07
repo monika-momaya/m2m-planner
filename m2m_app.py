@@ -21,7 +21,7 @@ from pathlib import Path
 
 MAX_HISTORY = 3
 
-def save_generated_files(meta, excel_bytes, word_bytes):
+def save_generated_files(meta, excel_bytes, word_bytes, programme_items=None):
     """Keep the last MAX_HISTORY generated file-sets in session memory (bytes included)."""
     if "generated_history" not in st.session_state:
         st.session_state.generated_history = []
@@ -35,6 +35,7 @@ def save_generated_files(meta, excel_bytes, word_bytes):
         "event_date": meta.get("event_date",""),
         "venue": meta.get("venue",""),
         "start_time": meta.get("start_time",""),
+        "programme_items": programme_items or [],
     }
 
 def render_history(limit=MAX_HISTORY):
@@ -971,16 +972,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### ⚙️ Event Details")
-
-    if st.session_state.get("last_entered"):
-        if st.button("🔁 Reload last entered details", use_container_width=True):
+if st.session_state.get("last_entered"):
+    top_cols = st.columns([4,1])
+    with top_cols[0]:
+        st.info("A previous session is available. Click to reload the last entered event details and programme items.")
+    with top_cols[1]:
+        if st.button("🔁 Reload Last Entered", use_container_width=True, type="primary"):
             le = st.session_state.last_entered
             st.session_state["_event_name_val"] = le.get("event_name","")
             st.session_state["_event_date_val"] = le.get("event_date","")
             st.session_state["_venue_val"] = le.get("venue","")
             st.session_state["_start_time_val"] = le.get("start_time","10:00 AM")
+            if le.get("programme_items"):
+                st.session_state.programme_items = [dict(x) for x in le["programme_items"]]
+            st.rerun()
+
+with st.sidebar:
+    st.markdown("### ⚙️ Event Details")
 
     event_name = st.text_input("Event Name", value=st.session_state.get("_event_name_val",""), placeholder="e.g. BTS 2025 Inauguration", key="_event_name_val")
     event_date = st.text_input("Event Date", value=st.session_state.get("_event_date_val",""), placeholder="e.g. 15-Aug-2025", key="_event_date_val")
@@ -1141,6 +1149,7 @@ with dcol2:
             },
             excel_bytes=excel_buf.getvalue() if hasattr(excel_buf, "getvalue") else excel_buf,
             word_bytes=word_buf.getvalue() if hasattr(word_buf, "getvalue") else word_buf,
+            programme_items=st.session_state.get("programme_items", []),
         )
     else:
         st.error(f"Word export failed: {word_err}")
