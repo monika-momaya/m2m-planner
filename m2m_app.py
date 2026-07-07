@@ -196,10 +196,6 @@ LANGUAGE_OPTIONS = {
 import re as _re
 
 def extract_name_designation(item):
-    """
-    Best-effort extraction of a person's Name + full Designation from a
-    programme item string. Handles common patterns used in M2M sheets:
-    """
     if not item:
         return None, None
 
@@ -595,15 +591,6 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
                 tcBorders.append(el)
             tcPr.append(tcBorders)
 
-        def light_borders(cell):
-            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
-            tcBorders = OxmlElement('w:tcBorders')
-            for side in ['top','left','bottom','right']:
-                el = OxmlElement(f'w:{side}')
-                el.set(qn('w:val'),'nil')
-                tcBorders.append(el)
-            tcPr.append(tcBorders)
-
         def visible_borders(cell):
             tc = cell._tc; tcPr = tc.get_or_add_tcPr()
             tcBorders = OxmlElement('w:tcBorders')
@@ -624,9 +611,6 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
 
         add_footer(doc.sections[0], event_name)
 
-        # ══════════════════════════════════════════════════
-        # PAGE 1 — DIGNITARIES ON THE DAIS
-        # ══════════════════════════════════════════════════
         heading = doc.add_paragraph()
         heading.paragraph_format.space_before = Pt(0)
         heading.paragraph_format.space_after = Pt(8)
@@ -679,9 +663,6 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
 
         doc.add_page_break()
 
-        # ══════════════════════════════════════════════════
-        # PAGE 2+ — BILINGUAL MC SCRIPT
-        # ══════════════════════════════════════════════════
         _mc_lang_label = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
         mc_heading = doc.add_paragraph()
         mc_heading.paragraph_format.space_before = Pt(0)
@@ -733,9 +714,6 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
             body_k = p_kan.add_run(kan)
             body_k.font.size = Pt(9); body_k.font.name = 'Nirmala UI'
 
-        # ══════════════════════════════════════════════════
-        # FINAL PAGE — NOTES
-        # ══════════════════════════════════════════════════
         notes_rows = [(r['item'], r.get('remarks','')) for r in rows
                       if r.get('remarks','').strip()]
 
@@ -805,7 +783,6 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
 
     wb = Workbook()
 
-    # ── Sheet 1: Programme Planner ──
     ws1 = wb.active
     ws1.title = "Programme Planner"
     for col,w in {"A":22,"B":52,"C":18}.items():
@@ -935,7 +912,6 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
     nc.alignment = aln(h="left", wrap=True)
     ws1.row_dimensions[note_row].height = 28
 
-    # ── Sheet 2: Print View ──
     ws2 = wb.create_sheet("Print View")
     ws2.column_dimensions["A"].width = 22
     ws2.column_dimensions["B"].width = 52
@@ -948,7 +924,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
     c.font = Font(name="Arial",bold=True,color=WHITE,size=14)
     c.fill = fill(MAROON); c.alignment = aln(h="left")
     ws2.merge_cells("A1:B1")
-      # Event details in print view
+
     detail_labels = ["Event :","Date :","Venue :","Start Time :"]
     for i, lbl in enumerate(detail_labels, start=2):
         ws2[f"A{i}"] = lbl
@@ -956,10 +932,10 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         ws2[f"A{i}"].fill = fill(LT_GOLD)
         ws2[f"A{i}"].alignment = aln(h="right")
 
-    ws2["B2"] = f"=IF({PP}!B2=\"\",\"—\",{PP}!B2)"
-    ws2["B3"] = f"=IF({PP}!B3=\"\",\"—\",{PP}!B3)"
-    ws2["B4"] = f"=IF({PP}!B4=\"\",\"—\",{PP}!B4)"
-    ws2["B5"] = f"=IF({PP}!B5=\"\",\"—\",{PP}!B5)"
+    ws2["B2"] = f'=IF({PP}!B2="","—",{PP}!B2)'
+    ws2["B3"] = f'=IF({PP}!B3="","—",{PP}!B3)'
+    ws2["B4"] = f'=IF({PP}!B4="","—",{PP}!B4)'
+    ws2["B5"] = f'=IF({PP}!B5="","—",{PP}!B5)'
     for r in range(2,6):
         ws2[f"B{r}"].font = Font(name="Arial",color=DARK,size=9)
         ws2[f"B{r}"].fill = fill(WHITE)
@@ -992,7 +968,6 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
     ws2[f"A{tr2}"].fill = fill(DARK)
     ws2[f"A{tr2}"].alignment = aln(h="left")
 
-    # ── Sheet 3: MC Script ──
     ws3 = wb.create_sheet("MC Script")
     ws3.column_dimensions["A"].width = 52
     ws3.column_dimensions["B"].width = 52
@@ -1082,53 +1057,53 @@ DEFAULT_ITEMS = [
 # Below is the downloads + footer area only.
 
 # ── Downloads ─────────────────────────────────────────────────────────────
-    st.divider()
-    st.markdown("### 📥 Download")
+st.divider()
+st.markdown("### 📥 Download")
 
-    fname_base = f"Minute-to-Minute Programme for {safe_filename(event_name)}" if event_name else "Minute-to-Minute Programme"
+fname_base = f"Minute-to-Minute Programme for {safe_filename(event_name)}" if event_name else "Minute-to-Minute Programme"
 
-    dcol1, dcol2 = st.columns(2)
+dcol1, dcol2 = st.columns(2)
 
-    with dcol1:
-        excel_buf = build_excel(event_name, event_date, venue, rows, logo_bytes, lang_code)
+with dcol1:
+    excel_buf = build_excel(event_name, event_date, venue, rows, logo_bytes, lang_code)
+    st.download_button(
+        label="⬇️ Download Excel (.xlsx)",
+        data=excel_buf,
+        file_name=f"{fname_base}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+    st.caption("3 sheets: Programme Planner · Print View · MC Script")
+
+with dcol2:
+    word_buf, word_err = build_word(event_name, event_date, venue, rows, logo_bytes, lang_code)
+    if word_buf:
         st.download_button(
-            label="⬇️ Download Excel (.xlsx)",
-            data=excel_buf,
-            file_name=f"{fname_base}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            label="⬇️ Download M2M (.docx)",
+            data=word_buf,
+            file_name=f"{fname_base}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
         )
-        st.caption("3 sheets: Programme Planner · Print View · MC Script")
+        st.caption("Programme table only — clean M2M for sharing")
+        save_history_item({
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "file_name": f"{fname_base}.docx",
+            "event_name": event_name,
+            "event_date": event_date,
+            "venue": venue,
+        })
+    else:
+        st.error(f"Word export failed: {word_err}")
 
-    with dcol2:
-        word_buf, word_err = build_word(event_name, event_date, venue, rows, logo_bytes, lang_code)
-        if word_buf:
-            st.download_button(
-                label="⬇️ Download M2M (.docx)",
-                data=word_buf,
-                file_name=f"{fname_base}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-            )
-            st.caption("Programme table only — clean M2M for sharing")
-            save_history_item({
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "file_name": f"{fname_base}.docx",
-                "event_name": event_name,
-                "event_date": event_date,
-                "venue": venue,
-            })
-        else:
-            st.error(f"Word export failed: {word_err}")
-
-    history_limit = st.radio(
-        "Show how many recent versions?",
-        options=[5, 10],
-        index=0,
-        horizontal=True,
-        key="history_limit_choice",
-    )
-    render_history(limit=history_limit)
+history_limit = st.radio(
+    "Show how many recent versions?",
+    options=[5, 10],
+    index=0,
+    horizontal=True,
+    key="history_limit_choice",
+)
+render_history(limit=history_limit)
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.divider()
