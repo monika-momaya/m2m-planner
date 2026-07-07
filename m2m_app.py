@@ -136,11 +136,9 @@ SCRIPTS = [
      "अब हम राष्ट्रगान के साथ कार्यक्रम का समापन करेंगे।\nसभी से खड़े होने का अनुरोध है।\n[राष्ट्रगान]\nजय हिंद!\nआप सभी का धन्यवाद। कार्यक्रम का समापन होता है।"),
 
     (["lamp","lighting","deepa","inauguration of"],
-     "We will now proceed to the auspicious lighting of the lamp.\nI request [Chief Guest Name & Designation] and the distinguished guests\n"
-     "to kindly come forward for the lamp lighting ceremony.",
+     "We will now proceed to the auspicious lighting of the lamp.\nI request [Chief Guest Name & Designation] and the distinguished guests\nto kindly come forward for the lamp lighting ceremony.",
      "ಈಗ ದೀಪ ಪ್ರಜ್ವಲನ ಕಾರ್ಯಕ್ರಮ ನಡೆಯಲಿದೆ.\n[ಮುಖ್ಯ ಅತಿಥಿ ಹೆಸರು] ಮತ್ತು ಗಣ್ಯರನ್ನು ದೀಪ ಬೆಳಗಿಸಲು ವಿನಂತಿಸುತ್ತೇವೆ.",
-     "अब हम दीप प्रज्वलन के शुभ कार्यक्रम की ओर बढ़ेंगे।\nहम [मुख्य अतिथि का नाम एवं पद] तथा गणमान्य अतिथियों से\n"
-     "दीप प्रज्वलन हेतु मंच पर पधारने का अनुरोध करते हैं।"),
+     "अब हम दीप प्रज्वलन के शुभ कार्यक्रम की ओर बढ़ेंगे।\nहम [मुख्य अतिथि का नाम एवं पद] तथा गणमान्य अतिथियों से\nदीप प्रज्वलन हेतु मंच पर पधारने का अनुरोध करते हैं।"),
 
     (["perspective","industry","context setting","biotech","startup"],
      "We will now hear the perspective from [Name], [Designation].\n[After speech] Thank you, [Name], for those valuable insights.",
@@ -192,23 +190,20 @@ LANGUAGE_OPTIONS = {
     "English + ಕನ್ನಡ (Kannada)": {"code": "kan", "label": "ಕನ್ನಡ", "font": "Nirmala UI"},
     "English + हिन्दी (Hindi)": {"code": "hin", "label": "हिन्दी", "font": "Nirmala UI"},
 }
+
 import re as _re
 
 def extract_name_designation(item):
     if not item:
         return None, None
-
     matches = list(_re.finditer(r'\bby\b', item, flags=_re.IGNORECASE))
     if not matches:
         return None, None
-
     last_by = matches[-1]
     rest = item[last_by.end():].strip()
     if not rest:
         return None, None
-
     rest = rest.rstrip('.').strip()
-
     if ',' in rest:
         name_part, designation = rest.split(',', 1)
         name_part = name_part.strip()
@@ -216,16 +211,13 @@ def extract_name_designation(item):
     else:
         name_part = rest.strip()
         designation = ""
-
     if not name_part:
         return None, None
-
     return name_part, designation
 
 def fill_placeholders(template, name, designation):
     if not name:
         return template
-
     full = f"{name}, {designation}" if designation else name
     replacements = [
         (r'\[Full Name & Designation\]', full),
@@ -251,7 +243,6 @@ def fill_placeholders(template, name, designation):
         (r'\[नाम\]', name),
         (r'\[पदनाम\]', designation if designation else ""),
     ]
-
     result = template
     for pattern, value in replacements:
         result = _re.sub(pattern, value, result)
@@ -269,7 +260,6 @@ def get_script(item, lang_code="kan"):
             eng_filled = fill_placeholders(eng, name, designation)
             regional_filled = fill_placeholders(regional, name, designation) if name else regional
             return eng_filled, regional_filled
-
     eng = f"We will now have — {item}.\nI request [Name / Designation] to kindly come forward.\n[MC Note: Add specific announcement text]"
     kan = f"ಈಗ — {item}.\n[ಹೆಸರು] ಅವರನ್ನು ಮುಂದೆ ಬರಲು ವಿನಂತಿಸುತ್ತೇವೆ."
     hin = f"अब — {item}.\n[नाम / पदनाम] से मंच पर पधारने का अनुरोध है।"
@@ -310,13 +300,18 @@ def fmt_slot(s,e): return f"{fmt_time(s)} – {fmt_time(e)}"
 
 def safe_filename(name):
     import re
-    return re.sub(r'[\\/*?:"<>|]','', name).strip() or "Programme"
+    return re.sub(r'[\\\\/*?:"<>|]','', name).strip() or "Programme"
+
+def compute_slots(rows, start_dt):
+    current = start_dt
+    for row in rows:
+        end = current + timedelta(minutes=int(row.get("duration", 0) or 0))
+        row["start_str"] = fmt_time(current)
+        row["slot"] = fmt_slot(current, end)
+        current = end
+    return rows
 
 def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
-    """
-    Generates a clean Word doc using python-docx.
-    Layout: logo/title/date-venue-start line + programme table only.
-    """
     try:
         from docx import Document as DocxDoc
         from docx.shared import Pt, RGBColor, Cm
@@ -479,292 +474,11 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
 
     except Exception as e:
         import traceback
-        return None, f"{type(e).__name__}: {e}\n{traceback.format_exc()[-500:]}"
-      # ── MC Document builder ──────────────────────────────────────────────────────
-def extract_all_names(rows):
-    """
-    Extract every person's name from ALL programme items — not just "by" patterns.
-    Looks for titles: Shri, Smt, Dr., Mr., Ms., Mrs., Prof., H.E., Hon'ble, Sri.
-    Returns list of (name_with_title, designation, source_item).
-    """
-    import re as _re2
-    seen = set()
-    results = []
-    title_pattern = _re2.compile(
-        r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['']?ble|Sri|"
-        r"Padma(?:shri|bhushan|vibhushan)|Padma Shri)\s+[A-Z][A-Za-z]",
-        _re2.IGNORECASE
-    )
+        return None, f"{type(e).__name__}: {e}\\n{traceback.format_exc()[-500:]}"
 
-    by_pattern = _re2.compile(r"\bby\b", _re2.IGNORECASE)
-
-    for row in rows:
-        item = row.get('item', '')
-        if not item:
-            continue
-
-        by_matches = list(by_pattern.finditer(item))
-        if by_matches:
-            rest = item[by_matches[-1].end():].strip().rstrip('.')
-            if rest:
-                if ',' in rest:
-                    name_part, desig = rest.split(',', 1)
-                else:
-                    name_part, desig = rest, ''
-                name_part = name_part.strip(); desig = desig.strip()
-                if name_part and name_part.lower() not in seen:
-                    seen.add(name_part.lower())
-                    results.append((name_part, desig, item))
-
-        for m in title_pattern.finditer(item):
-            fragment = item[m.start():]
-            stop = _re2.search(r'\b(?:and|followed by|who|will|to|for)\b', fragment, _re2.I)
-            if stop:
-                fragment = fragment[:stop.start()]
-            fragment = fragment.strip().rstrip(',.')
-            if ',' in fragment:
-                name_part, desig = fragment.split(',', 1)
-                name_part = name_part.strip(); desig = desig.strip()
-            else:
-                name_part = fragment; desig = ''
-            name_lower = name_part.lower()
-            already_covered = any(
-                name_lower in s or s in name_lower or
-                name_lower in ' '.join([r[0]+' '+r[1] for r in results]).lower()
-                for s in seen
-            )
-            if name_part and not already_covered:
-                seen.add(name_lower)
-                results.append((name_part, desig, item))
-
-    return results
-
-def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
-    """
-    Full MC Document with three sections:
-      Page 1  — Dignitaries on the Dais
-      Page 2+ — Bilingual MC Script (English + regional)
-      Final   — Notes (only items that have a Remarks/Speaker entry)
-    """
-    try:
-        from docx import Document as DocxDoc
-        from docx.shared import Pt, RGBColor, Cm
-        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-        from docx.enum.table import WD_ALIGN_VERTICAL
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
-    except ImportError as e:
-        return None, f"python-docx not available: {e}"
-
-    try:
-        doc = DocxDoc()
-        for section in doc.sections:
-            section.top_margin    = Cm(1.6)
-            section.bottom_margin = Cm(1.6)
-            section.left_margin   = Cm(1.8)
-            section.right_margin  = Cm(1.8)
-
-        normal = doc.styles['Normal']
-        normal.font.name = 'Calibri'
-        normal.font.size = Pt(11)
-
-        NAVY = "1A2B4C"
-
-        def rgb(h):
-            h = h.lstrip('#')
-            return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
-
-        def set_cell_bg(cell, hex_color):
-            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'),'clear'); shd.set(qn('w:color'),'auto')
-            shd.set(qn('w:fill'), hex_color); tcPr.append(shd)
-
-        def no_borders(cell):
-            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
-            tcBorders = OxmlElement('w:tcBorders')
-            for side in ['top','left','bottom','right']:
-                el = OxmlElement(f'w:{side}'); el.set(qn('w:val'),'nil')
-                tcBorders.append(el)
-            tcPr.append(tcBorders)
-
-        def visible_borders(cell):
-            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
-            tcBorders = OxmlElement('w:tcBorders')
-            for side in ['top','left','bottom','right']:
-                el = OxmlElement(f'w:{side}')
-                el.set(qn('w:val'),'single')
-                el.set(qn('w:sz'),'4')
-                el.set(qn('w:color'),'D9D9D9')
-                tcBorders.append(el)
-            tcPr.append(tcBorders)
-
-        def add_footer(section, event_name):
-            footer = section.footer
-            fp = footer.paragraphs[0]
-            fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            fr = fp.add_run(f"For internal use only | {event_name or 'Event'}")
-            fr.font.size = Pt(8); fr.font.color.rgb = rgb("999999"); fr.italic = True
-
-        add_footer(doc.sections[0], event_name)
-
-        heading = doc.add_paragraph()
-        heading.paragraph_format.space_before = Pt(0)
-        heading.paragraph_format.space_after = Pt(8)
-        hr = heading.add_run("Dignitaries on the Dais")
-        hr.bold = True; hr.font.size = Pt(20); hr.font.color.rgb = rgb(NAVY)
-        hr.font.name = 'Calibri'
-
-        subh = doc.add_paragraph()
-        subh.paragraph_format.space_after = Pt(12)
-        sr = subh.add_run(f"{event_name or 'Event'} | {event_date or ''} | {venue or ''}")
-        sr.font.size = Pt(10); sr.font.color.rgb = rgb("555555"); sr.italic = True
-        sr.font.name = 'Calibri'
-
-        all_names = extract_all_names(rows)
-
-        if all_names:
-            dais_table = doc.add_table(rows=1, cols=2)
-            dais_table.autofit = False
-            hdr_cells = dais_table.rows[0].cells
-            hdr_cells[0].width = Cm(5.5); hdr_cells[1].width = Cm(11.9)
-            for cell, text in zip(hdr_cells, ["Name", "Designation / Title"]):
-                set_cell_bg(cell, "F5F5F5")
-                visible_borders(cell)
-                p = cell.paragraphs[0]
-                p.paragraph_format.space_before = Pt(2)
-                p.paragraph_format.space_after  = Pt(2)
-                r = p.add_run(text)
-                r.bold = True; r.font.size = Pt(11); r.font.name = 'Calibri'
-
-            for i, (name, desig, source) in enumerate(all_names):
-                tr = dais_table.add_row()
-                bg = "FFFFFF" if i % 2 == 0 else "FAFAFA"
-                tr.cells[0].width = Cm(5.5)
-                tr.cells[1].width = Cm(11.9)
-                for idx, (cell, text) in enumerate(zip(tr.cells, [name, desig])):
-                    set_cell_bg(cell, bg)
-                    visible_borders(cell)
-                    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
-                    p = cell.paragraphs[0]
-                    p.paragraph_format.space_before = Pt(2)
-                    p.paragraph_format.space_after = Pt(2)
-                    run = p.add_run(text)
-                    run.font.size = Pt(11)
-                    run.font.name = 'Calibri'
-                    if idx == 0:
-                        run.bold = True
-        else:
-            no_names = doc.add_paragraph()
-            no_names.add_run("No names detected in the programme. Please add speaker names to the programme items.")
-
-        doc.add_page_break()
-
-        _mc_lang_label = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
-        mc_heading = doc.add_paragraph()
-        mc_heading.paragraph_format.space_before = Pt(0)
-        mc_heading.paragraph_format.space_after  = Pt(6)
-        mhr = mc_heading.add_run(f"MC Script — Bilingual (English + {_mc_lang_label})")
-        mhr.bold = True; mhr.font.size = Pt(16); mhr.font.color.rgb = rgb(NAVY)
-        mhr.font.name = 'Calibri'
-
-        note_p = doc.add_paragraph()
-        note_p.paragraph_format.space_after = Pt(12)
-        nr = note_p.add_run("Replace all text in [brackets] with actual names/designations before the event.")
-        nr.italic = True; nr.font.size = Pt(9); nr.font.color.rgb = rgb("888888")
-        nr.font.name = 'Calibri'
-
-        for i, row in enumerate(rows):
-            eng, kan = get_script(row['item'], lang_code)
-
-            item_para = doc.add_paragraph()
-            item_para.paragraph_format.space_before = Pt(10)
-            item_para.paragraph_format.space_after = Pt(4)
-            ir = item_para.add_run(f"{i+1}. {row['item']}")
-            ir.bold = True; ir.font.size = Pt(11)
-            ir.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb(NAVY)
-            ir.font.name = 'Calibri'
-            sr2 = item_para.add_run(f" — {row['slot']}")
-            sr2.font.size = Pt(10); sr2.font.color.rgb = rgb("555555")
-            sr2.font.name = 'Calibri'
-
-            sc_table = doc.add_table(rows=1, cols=2)
-            sc_table.autofit = False
-            cells = sc_table.rows[0].cells
-            cells[0].width = Cm(8.5); cells[1].width = Cm(8.9)
-
-            for cell in cells:
-                visible_borders(cell)
-                set_cell_bg(cell, "FFFFFF")
-
-            p_eng = cells[0].paragraphs[0]
-            lbl_e = p_eng.add_run("English\n")
-            lbl_e.bold = True; lbl_e.font.size = Pt(9)
-            lbl_e.font.color.rgb = rgb("1A5276"); lbl_e.font.name = 'Calibri'
-            body_e = p_eng.add_run(eng)
-            body_e.font.size = Pt(9); body_e.font.name = 'Calibri'
-
-            p_kan = cells[1].paragraphs[0]
-            lbl_k = p_kan.add_run(f"{_mc_lang_label}\n")
-            lbl_k.bold = True; lbl_k.font.size = Pt(9)
-            lbl_k.font.color.rgb = rgb("7B5200"); lbl_k.font.name = 'Nirmala UI'
-            body_k = p_kan.add_run(kan)
-            body_k.font.size = Pt(9); body_k.font.name = 'Nirmala UI'
-          notes_rows = [(r['item'], r.get('remarks','')) for r in rows if r.get('remarks','').strip()]
-
-        if notes_rows:
-            doc.add_page_break()
-
-            notes_h = doc.add_paragraph()
-            notes_h.paragraph_format.space_before = Pt(0)
-            notes_h.paragraph_format.space_after = Pt(8)
-            nhr = notes_h.add_run("Notes")
-            nhr.bold = True; nhr.font.size = Pt(20)
-            nhr.font.color.rgb = rgb(NAVY); nhr.font.name = 'Calibri'
-
-            notes_sub = doc.add_paragraph()
-            notes_sub.paragraph_format.space_after = Pt(12)
-            nsr = notes_sub.add_run("Programme-specific notes and instructions for the MC.")
-            nsr.font.size = Pt(10); nsr.font.color.rgb = rgb("555555")
-            nsr.italic = True; nsr.font.name = 'Calibri'
-
-            notes_table = doc.add_table(rows=1, cols=2)
-            notes_table.autofit = False
-            nhdr = notes_table.rows[0].cells
-            nhdr[0].width = Cm(8.0); nhdr[1].width = Cm(9.4)
-            for cell, text in zip(nhdr, ["Programme Item", "Notes / Instructions"]):
-                set_cell_bg(cell, "F5F5F5"); visible_borders(cell)
-                p = cell.paragraphs[0]
-                p.paragraph_format.space_before = Pt(2)
-                p.paragraph_format.space_after = Pt(2)
-                run = p.add_run(text)
-                run.bold = True; run.font.size = Pt(11); run.font.name = 'Calibri'
-
-            for i, (item, note) in enumerate(notes_rows):
-                tr = notes_table.add_row()
-                bg = "FFFFFF" if i % 2 == 0 else "FAFAFA"
-                tr.cells[0].width = Cm(8.0); tr.cells[1].width = Cm(9.4)
-                for cell, text in zip(tr.cells, [item, note]):
-                    set_cell_bg(cell, bg); visible_borders(cell)
-                    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
-                    p = cell.paragraphs[0]
-                    p.paragraph_format.space_before = Pt(2)
-                    p.paragraph_format.space_after = Pt(2)
-                    run = p.add_run(text)
-                    run.font.size = Pt(11); run.font.name = 'Calibri'
-
-        buf = io.BytesIO()
-        doc.save(buf); buf.seek(0)
-        return buf, None
-
-    except Exception as e:
-        import traceback
-        return None, f"{type(e).__name__}: {e}\n{traceback.format_exc()[-500:]}"
-
-# ── Excel export ──────────────────────────────────────────────────────────────
 def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
     MAROON="7B1B1B"; GOLD="C9A84C"; WHITE="FFFFFF"; DARK="2C2C2C"
-    CREAM="FFF8EE"; LT_GOLD="F5E6C8"; LT_MAROON="F2DADA"; GREY="F7F7F7"
+    LT_GOLD="F5E6C8"
 
     def sd(s="thin",c=GOLD): return Side(style=s,color=c)
     def bdr(s="thin"): b=sd(s); return Border(left=b,right=b,top=b,bottom=b)
@@ -778,7 +492,6 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         return Border(left=m,right=m,top=m,bottom=m)
 
     wb = Workbook()
-
     ws1 = wb.active
     ws1.title = "Programme Planner"
     for col,w in {"A":22,"B":52,"C":18}.items():
@@ -988,9 +701,12 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         ws3[f"B{row_num}"].font = Font(name="Nirmala UI",size=9)
         row_num += 2
 
-    return wb
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
 
-# ── Title banner (plain — logo goes into downloaded files only) ──────────────
+# ── Title banner ──────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="title-banner">
     <div class="title-banner-text">
@@ -1033,7 +749,7 @@ with st.sidebar:
     st.markdown("""
 1. Fill event details above
 2. Upload logo (optional)
-3. Add programme items + durations
+3. Add/edit programme items below
 4. Download Excel or Word
 """)
     st.markdown("---")
@@ -1044,17 +760,6 @@ with st.sidebar:
                 f"<span style='background:{color};padding:2px 8px;"
                 f"border-radius:4px;font-size:0.78rem;color:#2C2C2C'>{cat}</span><br>",
                 unsafe_allow_html=True)
-
-def normalize_rows(rows):
-    out = []
-    for r in rows:
-        out.append({
-            "item": r.get("item",""),
-            "duration": int(r.get("duration",0) or 0),
-            "remarks": r.get("remarks",""),
-            "speaker": r.get("speaker",""),
-        })
-    return out
 
 if logo_bytes:
     st.info("✅ Logo uploaded — it will appear in your downloaded Excel and Word files.")
@@ -1077,12 +782,7 @@ if not start_dt:
     st.error(f"⚠️ Can't parse '{start_time}'. Use format like '10:00 AM' or '09:30 AM'")
     st.stop()
 
-rows = normalize_rows(DEFAULT_ITEMS)
-
-# ── Programme table ───────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📝 Programme Items</div>',
-            unsafe_allow_html=True)
-
+# ── Default programme items ───────────────────────────────────────────────────
 DEFAULT_ITEMS = [
     {"item":"MC welcomes dignitaries onto the Dias","duration":3,"remarks":""},
     {"item":"Naada Geethe (State Anthem)","duration":4,"remarks":""},
@@ -1092,14 +792,61 @@ DEFAULT_ITEMS = [
     {"item":"Inaugural Address by the Chief Guest","duration":10,"remarks":""},
     {"item":"Information Technology Industry perspective by Shri Kris Gopalakrishnan, Chairperson, Vision Group on Information Technology, Govt. of Karnataka","duration":3,"remarks":""},
     {"item":"Biotechnology Industry perspective by Dr. Kiran Mazumdar Shaw, Chairperson, Vision Group on Biotechnology, Govt. of Karnataka","duration":3,"remarks":""},
-    {"item":"Chief Minister’s address","duration":10,"remarks":""},
+    {"item":"Chief Minister's address","duration":10,"remarks":""},
     {"item":"Vote of thanks by Secretary, Department of Electronics, IT, Bt and S&T, Govt. of Karnataka","duration":4,"remarks":""},
 ]
 
-# If the table row editor is elsewhere in your original file, keep that original block.
-# Below is the downloads + footer area only.
+if "programme_items" not in st.session_state:
+    st.session_state.programme_items = [dict(x) for x in DEFAULT_ITEMS]
 
-# ── Downloads ─────────────────────────────────────────────────────────────
+# ── Programme table (editable) ────────────────────────────────────────────────
+st.markdown('<div class="section-header">📝 Programme Items</div>', unsafe_allow_html=True)
+
+df_input = pd.DataFrame(st.session_state.programme_items)
+if "item" not in df_input.columns: df_input["item"] = ""
+if "duration" not in df_input.columns: df_input["duration"] = 5
+if "remarks" not in df_input.columns: df_input["remarks"] = ""
+
+edited_df = st.data_editor(
+    df_input[["item","duration","remarks"]],
+    num_rows="dynamic",
+    use_container_width=True,
+    column_config={
+        "item": st.column_config.TextColumn("Programme Item", width="large"),
+        "duration": st.column_config.NumberColumn("Duration (mins)", min_value=1, max_value=180, step=1),
+        "remarks": st.column_config.TextColumn("Remarks / Notes", width="medium"),
+    },
+    key="programme_editor",
+)
+
+st.session_state.programme_items = edited_df.to_dict("records")
+
+rows_raw = [r for r in st.session_state.programme_items if str(r.get("item","")).strip()]
+rows = []
+for r in rows_raw:
+    rows.append({
+        "item": str(r.get("item","")).strip(),
+        "duration": int(r.get("duration", 0) or 0),
+        "remarks": str(r.get("remarks","")).strip(),
+    })
+
+if not rows:
+    st.warning("Add at least one programme item above to generate downloads.")
+    st.stop()
+
+rows = compute_slots(rows, start_dt)
+
+# ── Programme preview ─────────────────────────────────────────────────────────
+st.markdown('<div class="section-header">🗂️ Programme Preview</div>', unsafe_allow_html=True)
+for row in rows:
+    st.markdown(
+        f"<div style='padding:6px 0;border-bottom:1px solid #eee;'>"
+        f"<span class='time-pill'>{row['slot']}</span>&nbsp;&nbsp;"
+        f"<b>{row['item']}</b></div>",
+        unsafe_allow_html=True,
+    )
+
+# ── Downloads ──────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown("### 📥 Download")
 
