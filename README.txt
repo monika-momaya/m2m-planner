@@ -1,82 +1,75 @@
-M2M PROGRAMME PLANNER v4 — Major Update
+M2M PROGRAMME PLANNER v5 — Updated Release
 ==========================================
 
-WHAT CHANGED IN THIS VERSION:
+WHAT’S NEW IN THIS VERSION:
 
-1. TITLE COLOUR
-   Changed from brown/maroon to dark navy blue throughout.
+1. WORD DOWNLOAD SIMPLIFIED
+   The Word download now contains only the M2M Programme.
+   The separate MC Script content has been removed from that Word file.
 
-2. PROGRAMME TABLE
-   - No more bold on "Address" rows — clean plain text only
-   - Reduced gap between event details and the table
-   - Font size increased to 12pt
-   - Timings + ":" columns made narrower; Programme Details
-     column widened to use the space efficiently
-   - Removed "Total: X mins | Programme ends at..." line
-     (the last row's timing already shows when it ends)
+2. DIGNITARY NAMES BOLDED
+   In the MC document, names in the “Dignitaries on the Dais” section
+   now appear in bold for clearer presentation.
 
-3. FOOTER
-   New footer on every page: "For internal use only | <Event Name>"
+3. PROGRAMME TABLE SPACING
+   The Word programme table now uses 3 pt spacing before and 3 pt spacing
+   after each paragraph in the table for a tighter, cleaner layout.
 
-4. FONT
-   Default document font set to Calibri throughout.
+4. RECENT VERSION HISTORY
+   The app now shows the latest generated versions inside the site.
+   You can view the most recent 5 or 10 generated files.
 
-5. MC SCRIPT TABLES
-   Now have light, visible grey borders (previously borderless)
-   so each English/regional-language box is clearly outlined.
+5. OFFLINE BACKUP EXCEL
+   The Excel export still uses live formulas, so Duration and Start Time
+   edits recalculate the schedule automatically.
 
-6. DOWNLOAD ORDER
-   Excel button appears first (left), Word second (right) —
-   Excel is the recommended offline fallback.
+6. CALIBRI DEFAULT FONT
+   The document font remains Calibri throughout for consistency.
 
-7. LIVE EXCEL FORMULAS (Programme Planner sheet)
-   This sheet now has REAL Excel formulas, not just static text.
-   If the web app is ever unreachable, your team can open the
-   downloaded Excel directly:
-     - Edit the hidden Duration column (D) for any item
-     - Edit the seed Start Time in cell F1
-     - All Time Slots in Column A recalculate automatically
-   This makes the Excel a genuine offline backup tool.
+7. LOGO SUPPORT
+   Uploaded logos continue to appear in the downloaded Excel and Word files.
 
-8. DEFAULT PROGRAMME TEMPLATE
-   The app now pre-loads with the full Bengaluru Tech Summit 2026
-   inaugural structure (19 items) instead of a generic 10-item demo —
-   ready to customise for your next event in seconds.
+8. BILINGUAL SCRIPT SUPPORT
+   English + Kannada / Hindi script support remains available in the app.
+
+9. MC SCRIPT TABLES
+   MC Script tables continue to use visible light grey borders for clarity.
+
+10. DEFAULT PROGRAMME TEMPLATE
+    The app still opens with the preloaded programme template ready for
+    quick customization.
 
 EVERYTHING ELSE UNCHANGED:
-   - Bilingual MC Script (English + Kannada / Hindi toggle)
-   - Logo upload, embedded in both Excel and Word
-   - Clean borderless Programme table (View Gridlines mode)
-   - Print View tab in the app
+   - Streamlit app interface
+   - Excel download
+   - Word download
+   - Programme editing
+   - Logo upload
+   - Time slot calculations
+   - Bilingual content handling
 
 LOCAL:
   Windows → double-click Run_App_Windows.bat
   Mac     → double-click Run_App_Mac.command
 
 STREAMLIT CLOUD:
-  Upload m2m_app.py + requirements.txt to GitHub
+  Upload m2m_app.py and requirements.txt to GitHub
   Deploy at share.streamlit.io
 
 ==========================================
-NEW: AUTOMATIC NAME EXTRACTION FOR MC SCRIPT
+NOTES ON VERSION HISTORY
 ==========================================
-The MC Script now automatically pulls the speaker's Name + full
-Designation directly from your programme item text and inserts it
-into the script — in real time, no manual editing needed.
+The app stores the latest generated files in a local history file so the
+recent versions list can be shown on the site.
 
-Example:
-  Programme Item: "Biotechnology Industry perspective by Dr. Kiran
-                    Mazumdar Shaw, Chairperson, Vision Group on
-                    Biotechnology, Government of Karnataka"
+This is a free solution and does not require any paid plugin or external
+service.
 
-  MC Script (English): "We will now hear the perspective from
-                         Dr. Kiran Mazumdar Shaw, Chairperson,
-                         Vision Group on Biotechnology, Government
-                         of Karnataka."
-
-This works for ANY item with the pattern "... by <Name>, <Designation>"
-— across both English and the regional language (Kannada/Hindi).
-
-If an item has no detectable "by <Name>" pattern (e.g. "Words of
-Thanks", "Cultural Programme"), the generic [Name]/[Designation]
-placeholder template is used as before — the MC fills it in manually.
+==========================================
+RECOMMENDED FILES
+==========================================
+requirements-3.txt:
+  streamlit>=1.32.0
+  openpyxl>=3.1.0
+  pandas>=2.0.0
+  python-docx>=1.1.0
