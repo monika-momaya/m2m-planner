@@ -19,37 +19,60 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import json
 from pathlib import Path
 
-HISTORY_FILE = Path("m2m_history.json")
+MAX_HISTORY = 3
 
-def load_history():
-    if HISTORY_FILE.exists():
-        try:
-            return json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-    return []
+def save_generated_files(meta, excel_bytes, word_bytes):
+    """Keep the last MAX_HISTORY generated file-sets in session memory (bytes included)."""
+    if "generated_history" not in st.session_state:
+        st.session_state.generated_history = []
+    entry = dict(meta)
+    entry["excel_bytes"] = excel_bytes
+    entry["word_bytes"] = word_bytes
+    st.session_state.generated_history.insert(0, entry)
+    st.session_state.generated_history = st.session_state.generated_history[:MAX_HISTORY]
+    st.session_state.last_entered = {
+        "event_name": meta.get("event_name",""),
+        "event_date": meta.get("event_date",""),
+        "venue": meta.get("venue",""),
+        "start_time": meta.get("start_time",""),
+    }
 
-def save_history_item(meta):
-    history = load_history()
-    history.insert(0, meta)
-    history = history[:10]
-    try:
-        HISTORY_FILE.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-    return history
-
-def render_history(limit=10):
-    history = load_history()[:limit]
+def render_history(limit=MAX_HISTORY):
+    history = st.session_state.get("generated_history", [])[:limit]
     if not history:
-        st.caption("No generated history yet.")
+        st.caption("No generated history yet in this session. Generate a file below and it will appear here.")
         return
-    st.markdown("### 🕘 Recent Generated Versions")
-    for item in history:
-        st.markdown(
-            f"- **{item.get('file_name','Unnamed file')}** · {item.get('timestamp','')} · "
-            f"{item.get('event_name','')} · {item.get('event_date','')} · {item.get('venue','')}"
-        )
+    st.markdown("### 🕘 Recent Generated Versions (last 3, this session)")
+    for idx, item in enumerate(history):
+        with st.container():
+            cols = st.columns([3,1,1])
+            with cols[0]:
+                st.markdown(
+                    f"**{item.get('file_name','Unnamed file')}**  \n"
+                    f"{item.get('timestamp','')} · {item.get('event_name','')} · "
+                    f"{item.get('event_date','')} · {item.get('venue','')}"
+                )
+            with cols[1]:
+                if item.get("excel_bytes"):
+                    st.download_button(
+                        "⬇️ Excel",
+                        data=item["excel_bytes"],
+                        file_name=f"{item.get('file_name','Programme')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"hist_excel_{idx}",
+                        use_container_width=True,
+                    )
+            with cols[2]:
+                if item.get("word_bytes"):
+                    st.download_button(
+                        "⬇️ Word",
+                        data=item["word_bytes"],
+                        file_name=f"{item.get('file_name','Programme')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"hist_word_{idx}",
+                        use_container_width=True,
+                    )
+        st.markdown("---")
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -271,24 +294,6 @@ def get_script(item, lang_code="kan"):
 def is_address(item):
     return any(k in item.lower() for k in ["address","keynote","remarks","speech","perspective","introduction"])
 
-def get_category(item):
-    t = item.lower()
-    if any(k in t for k in ["address","keynote","remarks","speech","perspective","context","introduction"]): return "Address / Speech"
-    if any(k in t for k in ["felicitat","release","souvenir","policy","publication"]): return "Felicitation / Release"
-    if any(k in t for k in ["cultural","dance","music","performance"]): return "Cultural Programme"
-    if any(k in t for k in ["naada","anthem","lamp","lighting","national","inaugur"]): return "Ceremonial"
-    if any(k in t for k in ["welcome","dignitar","vote","thanks","break","tea","interval"]): return "Welcome / Housekeeping"
-    return "General"
-
-CAT_COLORS = {
-    "Address / Speech": "#D6E4F0",
-    "Felicitation / Release": "#FDEBD0",
-    "Cultural Programme": "#F4D03F",
-    "Ceremonial": "#E8DAEF",
-    "Welcome / Housekeeping": "#D5F5E3",
-    "General": "#FFFFFF",
-}
-
 def parse_time(t):
     for fmt in ["%I:%M %p","%I:%M%p","%H:%M","%I %p"]:
         try: return datetime.strptime(t.strip().upper(), fmt)
@@ -475,6 +480,205 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
     except Exception as e:
         import traceback
         return None, f"{type(e).__name__}: {e}\\n{traceback.format_exc()[-500:]}"
+
+
+def extract_all_names(rows):
+    import re as _re2
+    seen = set()
+    results = []
+    title_pattern = _re2.compile(
+        r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['']?ble|Sri|"
+        r"Padma(?:shri|bhushan|vibhushan)|Padma Shri)\s+[A-Z][A-Za-z]",
+        _re2.IGNORECASE
+    )
+    by_pattern = _re2.compile(r"\bby\b", _re2.IGNORECASE)
+
+    for row in rows:
+        item = row.get('item', '')
+        if not item:
+            continue
+        by_matches = list(by_pattern.finditer(item))
+        if by_matches:
+            rest = item[by_matches[-1].end():].strip().rstrip('.')
+            if rest:
+                if ',' in rest:
+                    name_part, desig = rest.split(',', 1)
+                else:
+                    name_part, desig = rest, ''
+                name_part = name_part.strip(); desig = desig.strip()
+                if name_part and name_part.lower() not in seen:
+                    seen.add(name_part.lower())
+                    results.append((name_part, desig, item))
+        for m in title_pattern.finditer(item):
+            fragment = item[m.start():]
+            stop = _re2.search(r'\b(?:and|followed by|who|will|to|for)\b', fragment, _re2.I)
+            if stop:
+                fragment = fragment[:stop.start()]
+            fragment = fragment.strip().rstrip(',.')
+            if ',' in fragment:
+                name_part, desig = fragment.split(',', 1)
+                name_part = name_part.strip(); desig = desig.strip()
+            else:
+                name_part = fragment; desig = ''
+            name_lower = name_part.lower()
+            already_covered = any(
+                name_lower in s or s in name_lower
+                for s in seen
+            )
+            if name_part and not already_covered:
+                seen.add(name_lower)
+                results.append((name_part, desig, item))
+    return results
+
+def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
+    try:
+        from docx import Document as DocxDoc
+        from docx.shared import Pt, RGBColor, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_ALIGN_VERTICAL
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+    except ImportError as e:
+        return None, f"python-docx not available: {e}"
+
+    try:
+        doc = DocxDoc()
+        for section in doc.sections:
+            section.top_margin = Cm(1.6)
+            section.bottom_margin = Cm(1.6)
+            section.left_margin = Cm(1.8)
+            section.right_margin = Cm(1.8)
+
+        normal = doc.styles['Normal']
+        normal.font.name = 'Calibri'
+        normal.font.size = Pt(11)
+        NAVY = "1A2B4C"
+
+        def rgb(h):
+            h = h.lstrip('#')
+            return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
+
+        def set_cell_bg(cell, hex_color):
+            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'),'clear'); shd.set(qn('w:color'),'auto')
+            shd.set(qn('w:fill'), hex_color); tcPr.append(shd)
+
+        def visible_borders(cell):
+            tc = cell._tc; tcPr = tc.get_or_add_tcPr()
+            tcBorders = OxmlElement('w:tcBorders')
+            for side in ['top','left','bottom','right']:
+                el = OxmlElement(f'w:{side}')
+                el.set(qn('w:val'),'single')
+                el.set(qn('w:sz'),'4')
+                el.set(qn('w:color'),'D9D9D9')
+                tcBorders.append(el)
+            tcPr.append(tcBorders)
+
+        footer = doc.sections[0].footer
+        fp = footer.paragraphs[0]
+        fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        fr = fp.add_run(f"For internal use only | {event_name or 'Event'}")
+        fr.font.size = Pt(8); fr.font.color.rgb = rgb("999999"); fr.italic = True
+
+        heading = doc.add_paragraph()
+        hr = heading.add_run("Dignitaries on the Dais")
+        hr.bold = True; hr.font.size = Pt(20); hr.font.color.rgb = rgb(NAVY); hr.font.name = 'Calibri'
+
+        subh = doc.add_paragraph()
+        sr = subh.add_run(f"{event_name or 'Event'} | {event_date or ''} | {venue or ''}")
+        sr.font.size = Pt(10); sr.font.color.rgb = rgb("555555"); sr.italic = True; sr.font.name = 'Calibri'
+
+        all_names = extract_all_names(rows)
+        if all_names:
+            dais_table = doc.add_table(rows=1, cols=2)
+            dais_table.autofit = False
+            hdr_cells = dais_table.rows[0].cells
+            hdr_cells[0].width = Cm(5.5); hdr_cells[1].width = Cm(11.9)
+            for cell, text in zip(hdr_cells, ["Name", "Designation / Title"]):
+                set_cell_bg(cell, "F5F5F5"); visible_borders(cell)
+                p = cell.paragraphs[0]
+                r = p.add_run(text); r.bold = True; r.font.size = Pt(11); r.font.name = 'Calibri'
+            for i, (name, desig, source) in enumerate(all_names):
+                tr = dais_table.add_row()
+                bg = "FFFFFF" if i % 2 == 0 else "FAFAFA"
+                tr.cells[0].width = Cm(5.5); tr.cells[1].width = Cm(11.9)
+                for idx, (cell, text) in enumerate(zip(tr.cells, [name, desig])):
+                    set_cell_bg(cell, bg); visible_borders(cell)
+                    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+                    p = cell.paragraphs[0]
+                    run = p.add_run(text); run.font.size = Pt(11); run.font.name = 'Calibri'
+                    if idx == 0: run.bold = True
+        else:
+            doc.add_paragraph().add_run("No names detected in the programme.")
+
+        doc.add_page_break()
+        _mc_lang_label = "हिन्दी" if lang_code == "hin" else "ಕನ್ನಡ"
+        mc_heading = doc.add_paragraph()
+        mhr = mc_heading.add_run(f"MC Script — Bilingual (English + {_mc_lang_label})")
+        mhr.bold = True; mhr.font.size = Pt(16); mhr.font.color.rgb = rgb(NAVY); mhr.font.name = 'Calibri'
+
+        note_p = doc.add_paragraph()
+        nr = note_p.add_run("Replace all text in [brackets] with actual names/designations before the event.")
+        nr.italic = True; nr.font.size = Pt(9); nr.font.color.rgb = rgb("888888"); nr.font.name = 'Calibri'
+
+        for i, row in enumerate(rows):
+            eng, kan = get_script(row['item'], lang_code)
+            item_para = doc.add_paragraph()
+            ir = item_para.add_run(f"{i+1}. {row['item']}")
+            ir.bold = True; ir.font.size = Pt(11)
+            ir.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb(NAVY)
+            ir.font.name = 'Calibri'
+            sr2 = item_para.add_run(f" — {row['slot']}")
+            sr2.font.size = Pt(10); sr2.font.color.rgb = rgb("555555"); sr2.font.name = 'Calibri'
+
+            sc_table = doc.add_table(rows=1, cols=2)
+            sc_table.autofit = False
+            cells = sc_table.rows[0].cells
+            cells[0].width = Cm(8.5); cells[1].width = Cm(8.9)
+            for cell in cells:
+                visible_borders(cell); set_cell_bg(cell, "FFFFFF")
+
+            p_eng = cells[0].paragraphs[0]
+            lbl_e = p_eng.add_run("English\n")
+            lbl_e.bold = True; lbl_e.font.size = Pt(9); lbl_e.font.color.rgb = rgb("1A5276"); lbl_e.font.name = 'Calibri'
+            body_e = p_eng.add_run(eng); body_e.font.size = Pt(9); body_e.font.name = 'Calibri'
+
+            p_kan = cells[1].paragraphs[0]
+            lbl_k = p_kan.add_run(f"{_mc_lang_label}\n")
+            lbl_k.bold = True; lbl_k.font.size = Pt(9); lbl_k.font.color.rgb = rgb("7B5200"); lbl_k.font.name = 'Nirmala UI'
+            body_k = p_kan.add_run(kan); body_k.font.size = Pt(9); body_k.font.name = 'Nirmala UI'
+
+        notes_rows = [(r['item'], r.get('remarks','')) for r in rows if r.get('remarks','').strip()]
+        if notes_rows:
+            doc.add_page_break()
+            notes_h = doc.add_paragraph()
+            nhr = notes_h.add_run("Notes")
+            nhr.bold = True; nhr.font.size = Pt(20); nhr.font.color.rgb = rgb(NAVY); nhr.font.name = 'Calibri'
+            notes_table = doc.add_table(rows=1, cols=2)
+            notes_table.autofit = False
+            nhdr = notes_table.rows[0].cells
+            nhdr[0].width = Cm(8.0); nhdr[1].width = Cm(9.4)
+            for cell, text in zip(nhdr, ["Programme Item", "Notes / Instructions"]):
+                set_cell_bg(cell, "F5F5F5"); visible_borders(cell)
+                p = cell.paragraphs[0]
+                run = p.add_run(text); run.bold = True; run.font.size = Pt(11); run.font.name = 'Calibri'
+            for i, (item, note) in enumerate(notes_rows):
+                tr = notes_table.add_row()
+                bg = "FFFFFF" if i % 2 == 0 else "FAFAFA"
+                tr.cells[0].width = Cm(8.0); tr.cells[1].width = Cm(9.4)
+                for cell, text in zip(tr.cells, [item, note]):
+                    set_cell_bg(cell, bg); visible_borders(cell)
+                    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+                    p = cell.paragraphs[0]
+                    run = p.add_run(text); run.font.size = Pt(11); run.font.name = 'Calibri'
+
+        buf = io.BytesIO()
+        doc.save(buf); buf.seek(0)
+        return buf, None
+    except Exception as e:
+        import traceback
+        return None, f"{type(e).__name__}: {e}\n{traceback.format_exc()[-500:]}"
 
 def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
     MAROON="7B1B1B"; GOLD="C9A84C"; WHITE="FFFFFF"; DARK="2C2C2C"
@@ -719,10 +923,19 @@ st.markdown("""
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### ⚙️ Event Details")
-    event_name = st.text_input("Event Name", placeholder="e.g. BTS 2025 Inauguration")
-    event_date = st.text_input("Event Date", placeholder="e.g. 15-Aug-2025")
-    venue = st.text_input("Venue", placeholder="e.g. Taj Vivanta, Bengaluru")
-    start_time = st.text_input("Start Time", value="10:00 AM")
+
+    if st.session_state.get("last_entered"):
+        if st.button("🔁 Reload last entered details", use_container_width=True):
+            le = st.session_state.last_entered
+            st.session_state["_event_name_val"] = le.get("event_name","")
+            st.session_state["_event_date_val"] = le.get("event_date","")
+            st.session_state["_venue_val"] = le.get("venue","")
+            st.session_state["_start_time_val"] = le.get("start_time","10:00 AM")
+
+    event_name = st.text_input("Event Name", value=st.session_state.get("_event_name_val",""), placeholder="e.g. BTS 2025 Inauguration", key="_event_name_val")
+    event_date = st.text_input("Event Date", value=st.session_state.get("_event_date_val",""), placeholder="e.g. 15-Aug-2025", key="_event_date_val")
+    venue = st.text_input("Venue", value=st.session_state.get("_venue_val",""), placeholder="e.g. Taj Vivanta, Bengaluru", key="_venue_val")
+    start_time = st.text_input("Start Time", value=st.session_state.get("_start_time_val","10:00 AM"), key="_start_time_val")
 
     st.markdown("---")
     st.markdown("### 🗣️ MC Script Language")
@@ -752,15 +965,6 @@ with st.sidebar:
 3. Add/edit programme items below
 4. Download Excel or Word
 """)
-    st.markdown("---")
-    st.markdown("**Category colours:**")
-    for cat, color in CAT_COLORS.items():
-        if cat != "General":
-            st.markdown(
-                f"<span style='background:{color};padding:2px 8px;"
-                f"border-radius:4px;font-size:0.78rem;color:#2C2C2C'>{cat}</span><br>",
-                unsafe_allow_html=True)
-
 if logo_bytes:
     st.info("✅ Logo uploaded — it will appear in your downloaded Excel and Word files.")
 
@@ -852,7 +1056,7 @@ st.markdown("### 📥 Download")
 
 fname_base = f"Minute-to-Minute Programme for {safe_filename(event_name)}" if event_name else "Minute-to-Minute Programme"
 
-dcol1, dcol2 = st.columns(2)
+dcol1, dcol2, dcol3 = st.columns(3)
 
 with dcol1:
     excel_buf = build_excel(event_name, event_date, venue, rows, logo_bytes, lang_code)
@@ -876,24 +1080,36 @@ with dcol2:
             use_container_width=True,
         )
         st.caption("Programme table only — clean M2M for sharing")
-        save_history_item({
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "file_name": f"{fname_base}.docx",
-            "event_name": event_name,
-            "event_date": event_date,
-            "venue": venue,
-        })
+        save_generated_files(
+            meta={
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "file_name": fname_base,
+                "event_name": event_name,
+                "event_date": event_date,
+                "venue": venue,
+                "start_time": start_time,
+            },
+            excel_bytes=excel_buf.getvalue() if hasattr(excel_buf, "getvalue") else excel_buf,
+            word_bytes=word_buf.getvalue() if hasattr(word_buf, "getvalue") else word_buf,
+        )
     else:
         st.error(f"Word export failed: {word_err}")
 
-history_limit = st.radio(
-    "Show how many recent versions?",
-    options=[5, 10],
-    index=0,
-    horizontal=True,
-    key="history_limit_choice",
-)
-render_history(limit=history_limit)
+with dcol3:
+    mc_buf, mc_err = build_mc_doc(event_name, event_date, venue, rows, logo_bytes, lang_code)
+    if mc_buf:
+        st.download_button(
+            label="⬇️ Download MC Document (.docx)",
+            data=mc_buf,
+            file_name=f"{fname_base} - MC Document.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+        st.caption("Dignitaries list · Bilingual MC Script · Notes")
+    else:
+        st.error(f"MC Document export failed: {mc_err}")
+
+render_history(limit=MAX_HISTORY)
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.divider()
