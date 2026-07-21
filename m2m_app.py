@@ -299,6 +299,18 @@ def safe_filename(name):
     import re
     return re.sub(r'[\\\\/*?:"<>|]','', name).strip() or "Programme"
 
+def normalize_item_text(text):
+    """Convert multi-line pasted programme text into a clean single line."""
+    if text is None:
+        return ""
+    text = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    parts = [p.strip(" ,\t") for p in text.split("\n") if p.strip()]
+    text = ", ".join(parts)
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r",\s*,+", ", ", text)
+    text = re.sub(r"\s+,", ",", text)
+    return text.strip(" ,")
+
 def compute_slots(rows, start_dt):
     current = start_dt
     for row in rows:
