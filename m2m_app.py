@@ -1059,7 +1059,7 @@ if not start_dt:
     st.stop()
 
 # ── Blank default rows ─────────────────────────────────────────────────────────
-DEFAULT_ROWS = 15
+DEFAULT_ROWS = 20
 if "programme_items" not in st.session_state:
     st.session_state.programme_items = [
         {"item": "", "duration": 5, "remarks": ""} for _ in range(DEFAULT_ROWS)
