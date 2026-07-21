@@ -1057,6 +1057,8 @@ edited_df = st.data_editor(
     key="programme_editor",
 )
 
+edited_df["item"] = edited_df["item"].apply(normalize_item_text)
+edited_df["remarks"] = edited_df["remarks"].fillna("").astype(str)
 st.session_state.programme_items = edited_df.to_dict("records")
 
 rows = []
