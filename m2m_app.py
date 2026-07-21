@@ -301,15 +301,32 @@ def safe_filename(name):
     return re.sub(r'[\\\\/*?:"<>|]','', name).strip() or "Programme"
 
 def normalize_item_text(text):
-    """Convert multi-line pasted programme text into a clean single line."""
+    """Convert pasted programme text into a clean single line.
+    - Real line breaks become commas.
+    - If pasted text loses line breaks, insert a comma before common designation words
+      when they are stuck to the previous word.
+    """
     if text is None:
         return ""
     text = str(text).replace("\r\n", "\n").replace("\r", "\n")
     parts = [p.strip(" ,\t") for p in text.split("\n") if p.strip()]
     text = ", ".join(parts)
+
+    # If line breaks are lost during paste, restore likely separators before common titles/designations.
+    stuck_words = [
+        "Chairperson", "Chairman", "Secretary", "Minister", "Hon'ble", "Hon’ble",
+        "Managing Director", "Director", "Principal Secretary", "Additional Chief Secretary",
+        "Deputy Chief Minister", "Chief Minister", "Vice Chancellor", "Commissioner",
+        "Ambassador", "President", "Founder", "Co-Founder", "CEO", "CTO", "COO"
+    ]
+    for word in stuck_words:
+        pattern = r'(?<![,\s])(' + re.escape(word) + r')'
+        text = re.sub(pattern, r', \1', text)
+
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r",\s*,+", ", ", text)
     text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r",\s*(,\s*)+", ", ", text)
     return text.strip(" ,")
 
 def compute_slots(rows, start_dt):
