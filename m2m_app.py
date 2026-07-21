@@ -554,12 +554,44 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
         return None, f"{type(e).__name__}: {e}\\n{traceback.format_exc()[-500:]}"
 
 
-def extract_all_names(rows):
+def extract_all_names(rows, dais_text=""):
     import re as _re2
     seen = set()
     results = []
+
+    def add_name(name_part, desig='', source=''):
+        name_part = (name_part or '').strip(' ,.-')
+        desig = (desig or '').strip(' ,.-')
+        if not name_part:
+            return
+        key = _re2.sub(r'\s+', ' ', name_part).lower()
+        if key in seen:
+            return
+        seen.add(key)
+        results.append((name_part, desig, source))
+
+    if dais_text and str(dais_text).strip():
+        lines = str(dais_text).replace('\r\n', '\n').replace('\r', '\n').split('\n')
+        for line in lines:
+            entry = line.strip(' •	-')
+            if not entry:
+                continue
+            if ',' in entry:
+                name_part, desig = entry.split(',', 1)
+            elif ' - ' in entry:
+                name_part, desig = entry.split(' - ', 1)
+            elif ' – ' in entry:
+                name_part, desig = entry.split(' – ', 1)
+            elif ':' in entry:
+                name_part, desig = entry.split(':', 1)
+            else:
+                name_part, desig = entry, ''
+            add_name(name_part, desig, 'custom dais list')
+        if results:
+            return results
+
     title_pattern = _re2.compile(
-        r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['']?ble|Sri|"
+        r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['’]?ble|Sri|"
         r"Padma(?:shri|bhushan|vibhushan)|Padma Shri)\s+[A-Z][A-Za-z]",
         _re2.IGNORECASE
     )
@@ -577,10 +609,7 @@ def extract_all_names(rows):
                     name_part, desig = rest.split(',', 1)
                 else:
                     name_part, desig = rest, ''
-                name_part = name_part.strip(); desig = desig.strip()
-                if name_part and name_part.lower() not in seen:
-                    seen.add(name_part.lower())
-                    results.append((name_part, desig, item))
+                add_name(name_part, desig, item)
         for m in title_pattern.finditer(item):
             fragment = item[m.start():]
             stop = _re2.search(r'\b(?:and|followed by|who|will|to|for)\b', fragment, _re2.I)
@@ -589,20 +618,15 @@ def extract_all_names(rows):
             fragment = fragment.strip().rstrip(',.')
             if ',' in fragment:
                 name_part, desig = fragment.split(',', 1)
-                name_part = name_part.strip(); desig = desig.strip()
             else:
-                name_part = fragment; desig = ''
-            name_lower = name_part.lower()
-            already_covered = any(
-                name_lower in s or s in name_lower
-                for s in seen
-            )
+                name_part, desig = fragment, ''
+            name_lower = (name_part or '').lower()
+            already_covered = any(name_lower in s or s in name_lower for s in seen)
             if name_part and not already_covered:
-                seen.add(name_lower)
-                results.append((name_part, desig, item))
+                add_name(name_part, desig, item)
     return results
 
-def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan"):
+def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan", dais_text=""):
     try:
         from docx import Document as DocxDoc
         from docx.shared import Pt, RGBColor, Cm
@@ -661,7 +685,7 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
         sr = subh.add_run(f"{event_name or 'Event'} | {event_date or ''} | {venue or ''}")
         sr.font.size = Pt(10); sr.font.color.rgb = rgb("555555"); sr.italic = True; sr.font.name = 'Calibri'
 
-        all_names = extract_all_names(rows)
+        all_names = extract_all_names(rows, dais_text)
         if all_names:
             dais_table = doc.add_table(rows=1, cols=2)
             dais_table.autofit = False
@@ -1127,6 +1151,20 @@ for row in rows:
 
 # ── Downloads ──────────────────────────────────────────────────────────────────
 st.divider()
+st.markdown("### Dignitaries on the Dais")
+dais_text = st.text_area(
+    "Optional: paste dignitaries for MC Copy (one per line; format like Name, Designation)",
+    value=st.session_state.get("dais_text", ""),
+    height=180,
+    placeholder="Example:
+Shri S. Gopalakrishnan (Kris), Chairperson, Vision Group on IT, Govt. of Karnataka
+Dr. Kiran Mazumdar-Shaw, Chairperson, Vision Group on Biotech, Govt. of Karnataka
+Dr. G. Parameshwara, Hon'ble Deputy Chief Minister, Govt. of Karnataka",
+    key="dais_text_input",
+)
+st.caption("If this box is filled, the MC Document will use this list for 'Dignitaries on the Dais'. If left blank, names will be pulled from the M2M programme.")
+st.session_state["dais_text"] = dais_text
+
 st.markdown("### 📥 Download")
 
 fname_base = f"Minute-to-Minute Programme for {safe_filename(event_name)}" if event_name else "Minute-to-Minute Programme"
@@ -1172,7 +1210,7 @@ with dcol2:
         st.error(f"Word export failed: {word_err}")
 
 with dcol3:
-    mc_buf, mc_err = build_mc_doc(event_name, event_date, venue, rows, logo_bytes, lang_code)
+    mc_buf, mc_err = build_mc_doc(event_name, event_date, venue, rows, logo_bytes, lang_code, dais_text)
     if mc_buf:
         st.download_button(
             label="⬇️ Download MC Document (.docx)",
