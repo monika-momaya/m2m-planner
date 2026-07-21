@@ -1,4 +1,4 @@
-"""M2M Programme Planner — Streamlit Web App v2
+"""Minute-to-Minute Programme — Streamlit Web App v2
 =============================================
 New in v2:
   • Logo upload → displayed beside event details
@@ -77,7 +77,7 @@ def render_history(limit=MAX_HISTORY):
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="M2M Programme Planner",
+    page_title="Minute-to-Minute Programme",
     page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -916,8 +916,8 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         ws2.row_dimensions[r].height = 22
         ac = ws2.cell(row=r, column=1)
         bc = ws2.cell(row=r, column=2)
-        ac.value = f"='{PP}'!A{7+i}"
-        bc.value = f"='{PP}'!B{7+i}"
+        ac.value = f"={PP}!A{7+i}"
+        bc.value = f"={PP}!B{7+i}"
         ac.font = fnt(color=DARK)
         bc.font = fnt(color=DARK, bold=is_address(row.get('item','')))
         ac.fill = fill(WHITE); bc.fill = fill(WHITE)
@@ -965,8 +965,8 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
 st.markdown("""
 <div class="title-banner">
     <div class="title-banner-text">
-        <h1>📋 M2M Programme Planner</h1>
-        <p>Minute-to-Minute Schedule · Bilingual MC Script · Excel & Word Download</p>
+        <h1>📋 Minute-to-Minute Programme</h1>
+        <p>Minute-to-Minute Programme · Excel & Word Download</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1044,33 +1044,25 @@ if not start_dt:
     st.error(f"⚠️ Can't parse '{start_time}'. Use format like '10:00 AM' or '09:30 AM'")
     st.stop()
 
-# ── Default programme items ───────────────────────────────────────────────────
-DEFAULT_ITEMS = [
-    {"item":"MC welcomes dignitaries onto the Dias","duration":3,"remarks":""},
-    {"item":"Naada Geethe (State Anthem)","duration":4,"remarks":""},
-    {"item":"Welcome address by Managing Director, Karnataka Innovation and Technology Society (KITS), Dept. of Electronics, IT, Bt and S&T, Govt. of Karnataka","duration":4,"remarks":""},
-    {"item":"Context setting by Secretary to Government, Department of Electronics, IT, Bt and S&T, Govt. of Karnataka","duration":5,"remarks":""},
-    {"item":"Lighting of the lamp and Inauguration of BTS 2026","duration":3,"remarks":""},
-    {"item":"Inaugural Address by the Chief Guest","duration":10,"remarks":""},
-    {"item":"Information Technology Industry perspective by Shri Kris Gopalakrishnan, Chairperson, Vision Group on Information Technology, Govt. of Karnataka","duration":3,"remarks":""},
-    {"item":"Biotechnology Industry perspective by Dr. Kiran Mazumdar Shaw, Chairperson, Vision Group on Biotechnology, Govt. of Karnataka","duration":3,"remarks":""},
-    {"item":"Chief Minister's address","duration":10,"remarks":""},
-    {"item":"Vote of thanks by Secretary, Department of Electronics, IT, Bt and S&T, Govt. of Karnataka","duration":4,"remarks":""},
-]
-
+# ── Blank default rows ─────────────────────────────────────────────────────────
+DEFAULT_ROWS = 15
 if "programme_items" not in st.session_state:
-    st.session_state.programme_items = [dict(x) for x in DEFAULT_ITEMS]
+    st.session_state.programme_items = [
+        {"item": "", "duration": 5, "remarks": ""} for _ in range(DEFAULT_ROWS)
+    ]
 
 # ── Programme table (editable) ────────────────────────────────────────────────
 st.markdown('<div class="section-header">📝 Programme Items</div>', unsafe_allow_html=True)
 
 df_input = pd.DataFrame(st.session_state.programme_items)
-if "item" not in df_input.columns: df_input["item"] = ""
-if "duration" not in df_input.columns: df_input["duration"] = 5
-if "remarks" not in df_input.columns: df_input["remarks"] = ""
+for col in ["item", "duration", "remarks"]:
+    if col not in df_input.columns:
+        df_input[col] = "" if col != "duration" else 5
+
+df_input = df_input[["item", "duration", "remarks"]]
 
 edited_df = st.data_editor(
-    df_input[["item","duration","remarks"]],
+    df_input,
     num_rows="dynamic",
     use_container_width=True,
     column_config={
@@ -1083,20 +1075,29 @@ edited_df = st.data_editor(
 
 st.session_state.programme_items = edited_df.to_dict("records")
 
-rows_raw = [r for r in st.session_state.programme_items if str(r.get("item","")).strip()]
 rows = []
-for r in rows_raw:
+for r in st.session_state.programme_items:
+    item = str(r.get("item", "")).strip()
+    dur = r.get("duration", 0)
+    if not item:
+        continue
+    try:
+        dur = int(dur or 0)
+    except Exception:
+        dur = 0
+    if dur <= 0:
+        continue
     rows.append({
-        "item": str(r.get("item","")).strip(),
-        "duration": int(r.get("duration", 0) or 0),
+        "item": item,
+        "duration": dur,
         "remarks": str(r.get("remarks","")).strip(),
     })
 
 if not rows:
-    st.warning("Add at least one programme item above to generate downloads.")
-    st.stop()
-
-rows = compute_slots(rows, start_dt)
+    st.info("Add one or more programme items to generate downloads. Blank rows are ignored.")
+    rows = []
+else:
+    rows = compute_slots(rows, start_dt) if rows else []
 
 # ── Programme preview ─────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">🗂️ Programme Preview</div>', unsafe_allow_html=True)
@@ -1174,5 +1175,5 @@ render_history(limit=MAX_HISTORY)
 st.divider()
 st.markdown("""
 <div style="text-align:center;color:#888;font-size:0.8rem">
-    M2M Programme Planner · Built for Event Management Teams
+    Minute-to-Minute Programme · Built for Event Management Teams
 </div>""", unsafe_allow_html=True)
