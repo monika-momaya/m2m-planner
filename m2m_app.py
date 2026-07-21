@@ -77,7 +77,7 @@ def render_history(limit=MAX_HISTORY):
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Minute-to-Minute Programme",
+    page_title="Minute-to-Minute Programme Planner",
     page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -87,16 +87,7 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main { background-color: #FAFAFA; }
-    .stApp { font-family: 'Arial', sans-serif; }
-    .title-banner {
-        background: linear-gradient(135deg, #7B1B1B 0%, #A52828 100%);
-        color: white; padding: 1.2rem 2rem; border-radius: 10px;
-        margin-bottom: 1.5rem; box-shadow: 0 4px 12px rgba(123,27,27,0.3);
-    }
-    .title-banner-text h1 { color: white; margin: 0; font-size: 1.8rem; }
-    .title-banner-text p { color: #F5E6C8; margin: 0.3rem 0 0 0; font-size: 0.95rem; }
-    .title-banner-logo img { max-height: 70px; border-radius: 6px; }
-    .section-header {
+    .stApp { font-family: 'Arial', sans-serif; }    .section-header {
         background: #C9A84C; color: white; padding: 0.5rem 1rem;
         border-radius: 6px; font-weight: bold; margin: 1rem 0 0.5rem 0; font-size: 0.95rem;
     }
@@ -961,15 +952,8 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
     buf.seek(0)
     return buf
 
-# ── Title banner ──────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="title-banner">
-    <div class="title-banner-text">
-        <h1>📋 Minute-to-Minute Programme</h1>
-        <p>Minute-to-Minute Programme · Excel & Word Download</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# ── Simple title ───────────────────────────────────────────────────────────────
+st.title("Minute-to-Minute Programme Planner")
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 if st.session_state.get("last_entered"):
