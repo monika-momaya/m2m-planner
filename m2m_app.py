@@ -1156,10 +1156,10 @@ dais_text = st.text_area(
     "Optional: paste dignitaries for MC Copy (one per line; format like Name, Designation)",
     value=st.session_state.get("dais_text", ""),
     height=180,
-    placeholder="Example:
+    placeholder="""Example:
 Shri S. Gopalakrishnan (Kris), Chairperson, Vision Group on IT, Govt. of Karnataka
 Dr. Kiran Mazumdar-Shaw, Chairperson, Vision Group on Biotech, Govt. of Karnataka
-Dr. G. Parameshwara, Hon'ble Deputy Chief Minister, Govt. of Karnataka",
+Dr. G. Parameshwara, Hon'ble Deputy Chief Minister, Govt. of Karnataka""",
     key="dais_text_input",
 )
 st.caption("If this box is filled, the MC Document will use this list for 'Dignitaries on the Dais'. If left blank, names will be pulled from the M2M programme.")
