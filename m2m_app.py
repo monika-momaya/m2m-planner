@@ -19,6 +19,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import json
 from pathlib import Path
+import uuid
 
 MAX_HISTORY = 3
 
@@ -1174,32 +1175,26 @@ if not start_dt:
     st.stop()
 
 # ── Blank default rows ─────────────────────────────────────────────────────────
-DEFAULT_ROWS = 20
+DEFAULT_ROWS = 4
 if "programme_items" not in st.session_state:
     st.session_state.programme_items = [
-        {"item": "", "duration": 5, "remarks": ""} for _ in range(DEFAULT_ROWS)
+        {"id": uuid.uuid4().hex, "item": "", "duration": 5, "remarks": ""} for _ in range(DEFAULT_ROWS)
     ]
+# Backfill stable ids for items that predate this editor (e.g. restored from
+# session history) so widget keys stay stable across reruns.
+for _it in st.session_state.programme_items:
+    if "id" not in _it:
+        _it["id"] = uuid.uuid4().hex
 
 # ── Programme table (editable) ────────────────────────────────────────────────
 st.markdown('<div class="section-header">📝 Programme Items</div>', unsafe_allow_html=True)
 
-df_input = pd.DataFrame(st.session_state.programme_items)
-for col in ["item", "duration", "remarks"]:
-    if col not in df_input.columns:
-        df_input[col] = "" if col != "duration" else 5
-
-df_input = df_input[["item", "duration", "remarks"]]
-
 st.markdown("#### 📋 Add items with a name + title/company (multi-line)")
 st.caption(
-    "The table's cells are single-line, so a line break typed or pasted into "
-    "a table cell gets collapsed — that's why everything came out on one bold "
-    "line last time. Paste multi-line entries here instead (this box behaves "
-    "like a normal Word/Excel paste and keeps real line breaks). "
     "**One item per block, separated by a blank line.** Line 1 of a block = "
     "the activity + name (renders bold, 12pt). Any lines below it = "
     "title/company (renders 11.5pt, not bold, underneath — just like your "
-    "reference screenshot)."
+    "reference screenshot). Real line breaks are kept exactly as pasted."
 )
 bulk_text = st.text_area(
     "Paste programme items here (blank line between items)",
@@ -1217,7 +1212,7 @@ bcol1, bcol2 = st.columns([1, 4])
 with bcol1:
     add_clicked = st.button("➕ Add to Programme", use_container_width=True)
 with bcol2:
-    st.caption("New items are added with a default 5-min duration — adjust durations in the table below.")
+    st.caption("New items are added with a default 5-min duration — adjust durations below.")
 
 if add_clicked:
     raw_blocks = re.split(r"\n\s*\n", bulk_text.strip()) if bulk_text.strip() else []
@@ -1226,45 +1221,81 @@ if add_clicked:
         cleaned = normalize_item_text(block)
         if not cleaned:
             continue
-        st.session_state.programme_items.append({"item": cleaned, "duration": 5, "remarks": ""})
+        st.session_state.programme_items.append(
+            {"id": uuid.uuid4().hex, "item": cleaned, "duration": 5, "remarks": ""}
+        )
         added += 1
     if added:
         st.session_state["bulk_item_paste"] = ""
-        st.success(f"Added {added} item(s) below — set their durations in the table.")
+        st.success(f"Added {added} item(s) below — set their durations.")
         st.rerun()
     else:
         st.warning("Nothing to add — paste some text into the box first.")
 
-st.markdown("#### 📝 Programme table")
+st.markdown("#### 📝 Programme list")
 st.caption(
-    "Good for quick single-line items, reordering, durations, and remarks. "
-    "For a name + title/company on separate lines, use the paste box above — "
-    "typing/pasting a line break directly into a table cell won't be kept."
+    "Each item is its own text box (not a spreadsheet cell), so line breaks "
+    "you type (Shift+Enter) or paste are kept exactly as entered — nothing "
+    "gets flattened on the next edit. Use ⬆️/⬇️ to reorder, 🗑️ to remove."
 )
 
-edited_df = st.data_editor(
-    df_input,
-    num_rows="dynamic",
-    use_container_width=True,
-    column_config={
-        "item": st.column_config.TextColumn(
-            "Programme Item", width="large",
-            help="Single-line editing. For a name + title/company on separate "
-                 "lines (12pt / 11.5pt), use the paste box above instead.",
-        ),
-        "duration": st.column_config.NumberColumn("Duration (mins)", min_value=1, max_value=180, step=1),
-        "remarks": st.column_config.TextColumn("Remarks / Notes", width="medium"),
-    },
-    key="programme_editor",
-)
+hcols = st.columns([5, 1.3, 2, 0.5, 0.5, 0.5])
+for c, label in zip(hcols, ["Item", "Duration (min)", "Remarks", "", "", ""]):
+    if label:
+        c.markdown(f"**{label}**")
 
-edited_df["item"] = edited_df["item"].apply(normalize_item_text)
-edited_df["remarks"] = edited_df["remarks"].fillna("").astype(str)
-st.session_state.programme_items = edited_df.to_dict("records")
+_items = st.session_state.programme_items
+_to_delete = None
+_move = None
+for i, it in enumerate(_items):
+    iid = it["id"]
+    c = st.columns([5, 1.3, 2, 0.5, 0.5, 0.5])
+    with c[0]:
+        new_item = st.text_area(
+            "Item", value=it.get("item", ""), key=f"item_{iid}",
+            height=68, label_visibility="collapsed",
+            placeholder="e.g. Welcome Address by Dr. Name, IAS\nDirector, Dept. of ...",
+        )
+    with c[1]:
+        new_dur = st.number_input(
+            "Duration", value=int(it.get("duration", 5) or 5), min_value=1, max_value=180,
+            step=1, key=f"dur_{iid}", label_visibility="collapsed",
+        )
+    with c[2]:
+        new_rem = st.text_input(
+            "Remarks", value=it.get("remarks", ""), key=f"rem_{iid}", label_visibility="collapsed",
+        )
+    with c[3]:
+        if st.button("⬆️", key=f"up_{iid}", disabled=(i == 0), help="Move up"):
+            _move = (i, -1)
+    with c[4]:
+        if st.button("⬇️", key=f"down_{iid}", disabled=(i == len(_items) - 1), help="Move down"):
+            _move = (i, 1)
+    with c[5]:
+        if st.button("🗑️", key=f"del_{iid}", help="Remove"):
+            _to_delete = iid
+    it["item"] = new_item
+    it["duration"] = new_dur
+    it["remarks"] = new_rem
+
+if st.button("➕ Add blank item"):
+    st.session_state.programme_items.append(
+        {"id": uuid.uuid4().hex, "item": "", "duration": 5, "remarks": ""}
+    )
+    st.rerun()
+
+if _to_delete is not None:
+    st.session_state.programme_items = [x for x in _items if x["id"] != _to_delete]
+    st.rerun()
+if _move is not None:
+    idx, d = _move
+    j = idx + d
+    _items[idx], _items[j] = _items[j], _items[idx]
+    st.rerun()
 
 rows = []
 for r in st.session_state.programme_items:
-    item = str(r.get("item", "")).strip()
+    item = normalize_item_text(r.get("item", ""))
     dur = r.get("duration", 0)
     if not item:
         continue
