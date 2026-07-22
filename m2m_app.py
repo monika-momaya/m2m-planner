@@ -212,21 +212,29 @@ import re as _re
 def extract_name_designation(item):
     if not item:
         return None, None
-    matches = list(_re.finditer(r'\bby\b', item, flags=_re.IGNORECASE))
+    lines = [ln.strip() for ln in str(item).split('\n') if ln.strip()]
+    if not lines:
+        return None, None
+    line1 = lines[0]
+    extra_lines = lines[1:]  # title/company entered on their own lines, if any
+    matches = list(_re.finditer(r'\bby\b', line1, flags=_re.IGNORECASE))
     if not matches:
         return None, None
     last_by = matches[-1]
-    rest = item[last_by.end():].strip()
+    rest = line1[last_by.end():].strip()
     if not rest:
         return None, None
     rest = rest.rstrip('.').strip()
     if ',' in rest:
-        name_part, designation = rest.split(',', 1)
+        name_part, suffix = rest.split(',', 1)
         name_part = name_part.strip()
-        designation = designation.strip()
+        suffix = suffix.strip()
     else:
         name_part = rest.strip()
-        designation = ""
+        suffix = ""
+    # Designation = any short suffix on line 1 (e.g. "IAS") plus whatever the
+    # user placed on the following lines (e.g. "Director, Dept. of ...").
+    designation = ", ".join([p for p in [suffix] + extra_lines if p])
     if not name_part:
         return None, None
     return name_part, designation
@@ -301,33 +309,31 @@ def safe_filename(name):
     return re.sub(r'[\\\\/*?:"<>|]','', name).strip() or "Programme"
 
 def normalize_item_text(text):
-    """Convert pasted programme text into a clean single line.
-    - Real line breaks become commas.
-    - If pasted text loses line breaks, insert a comma before common designation words
-      when they are stuck to the previous word.
+    """Clean up pasted programme text WITHOUT collapsing line breaks.
+
+    Reversed logic (v3): earlier versions turned every real line break ("Enter")
+    into a comma and force-inserted commas before designation words like
+    "Chairperson"/"Secretary" even when none existed. That is no longer done.
+
+    Now:
+    - Real line breaks (typed with Enter/Shift+Enter, or pasted from Word/Excel
+      with line breaks) are preserved AS-IS — line 1 stays line 1, line 2 stays
+      line 2, etc. Nothing is auto-joined with a comma.
+    - Only cosmetic cleanup happens per line: trim stray leading/trailing
+      commas, dashes and extra spaces, and drop fully blank lines.
+    - No word-stitching / comma-insertion heuristics are applied anymore —
+      whatever the user typed or pasted is what gets rendered.
     """
     if text is None:
         return ""
     text = str(text).replace("\r\n", "\n").replace("\r", "\n")
-    parts = [p.strip(" ,\t") for p in text.split("\n") if p.strip()]
-    text = ", ".join(parts)
-
-    # If line breaks are lost during paste, restore likely separators before common titles/designations.
-    stuck_words = [
-        "Chairperson", "Chairman", "Secretary", "Minister", "Hon'ble", "Hon'ble",
-        "Managing Director", "Director", "Principal Secretary", "Additional Chief Secretary",
-        "Deputy Chief Minister", "Chief Minister", "Vice Chancellor", "Commissioner",
-        "Ambassador", "President", "Founder", "Co-Founder", "CEO", "CTO", "COO"
-    ]
-    for word in stuck_words:
-        pattern = r'(?<![,\s])(' + re.escape(word) + r')'
-        text = re.sub(pattern, r', \1', text)
-
-    text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r",\s*,+", ", ", text)
-    text = re.sub(r"\s+,", ",", text)
-    text = re.sub(r",\s*(,\s*)+", ", ", text)
-    return text.strip(" ,")
+    lines = []
+    for ln in text.split("\n"):
+        ln = re.sub(r"[ \t]+", " ", ln).strip(" \t")
+        ln = ln.strip(" ,\t-")
+        if ln:
+            lines.append(ln)
+    return "\n".join(lines).strip()
 
 def compute_slots(rows, start_dt):
     current = start_dt
@@ -490,39 +496,69 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
 
         for row in rows:
             tr_row = table.add_row()
-            values = [row["slot"], ":", row["item"]]
+            item_text = str(row["item"] or "")
+            item_lines = [ln for ln in item_text.split("\n") if ln.strip()]
+            line1 = item_lines[0] if item_lines else ""
+            sub_lines = item_lines[1:]
+
+            values = [row["slot"], ":", line1]
             for j, (cell, text) in enumerate(zip(tr_row.cells, values)):
                 cell.width = col_widths[j]
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
                 set_cell_bg(cell, "FFFFFF")
                 p = cell.paragraphs[0]
                 p.paragraph_format.space_before = Pt(3)
-                p.paragraph_format.space_after = Pt(3)
+                p.paragraph_format.space_after = Pt(2) if (j == 2 and sub_lines) else Pt(3)
                 p.paragraph_format.line_spacing = 1.0
 
                 if j == 2:
-                    spans = _bold_name_spans(text)
-                    if spans:
-                        pos = 0
-                        for s, e in spans:
-                            if s > pos:
-                                r_ = p.add_run(text[pos:s])
+                    # Line 1 = the activity/name line -> 12pt.
+                    # Fully bold when it's a recognised activity/session heading
+                    # (Welcome Address, Film, Perspective, Interaction, etc.);
+                    # otherwise fall back to bolding just the name portion.
+                    if is_activity_item(item_text):
+                        r_bold = p.add_run(text)
+                        r_bold.font.size = Pt(12); r_bold.font.name = "Calibri"
+                        r_bold.font.color.rgb = rgb("2C2C2C")
+                        r_bold.bold = True
+                    else:
+                        spans = _bold_name_spans(text)
+                        if spans:
+                            pos = 0
+                            for s, e in spans:
+                                if s > pos:
+                                    r_ = p.add_run(text[pos:s])
+                                    r_.font.size = Pt(12); r_.font.name = "Calibri"
+                                    r_.font.color.rgb = rgb("2C2C2C")
+                                r_bold = p.add_run(text[s:e])
+                                r_bold.font.size = Pt(12); r_bold.font.name = "Calibri"
+                                r_bold.font.color.rgb = rgb("2C2C2C")
+                                r_bold.bold = True
+                                pos = e
+                            if pos < len(text):
+                                r_ = p.add_run(text[pos:])
                                 r_.font.size = Pt(12); r_.font.name = "Calibri"
                                 r_.font.color.rgb = rgb("2C2C2C")
-                            r_bold = p.add_run(text[s:e])
-                            r_bold.font.size = Pt(12); r_bold.font.name = "Calibri"
-                            r_bold.font.color.rgb = rgb("2C2C2C")
-                            r_bold.bold = True
-                            pos = e
-                        if pos < len(text):
-                            r_ = p.add_run(text[pos:])
-                            r_.font.size = Pt(12); r_.font.name = "Calibri"
-                            r_.font.color.rgb = rgb("2C2C2C")
-                    else:
-                        run = p.add_run(text)
-                        run.font.size = Pt(12); run.font.name = "Calibri"
-                        run.font.color.rgb = rgb("2C2C2C")
+                        else:
+                            run = p.add_run(text)
+                            run.font.size = Pt(12); run.font.name = "Calibri"
+                            run.font.color.rgb = rgb("2C2C2C")
                     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+                    # Line 2+ = title / company, rendered below the name at a
+                    # slightly smaller size (11.5pt), not bold — mirrors the
+                    # manual layout in the reference screenshot.
+                    for sub in sub_lines:
+                        p_sub = cell.add_paragraph()
+                        p_sub.paragraph_format.space_before = Pt(0)
+                        p_sub.paragraph_format.space_after = Pt(2)
+                        p_sub.paragraph_format.line_spacing = 1.0
+                        p_sub.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        r_sub = p_sub.add_run(sub)
+                        r_sub.font.size = Pt(11.5)
+                        r_sub.font.name = "Calibri"
+                        r_sub.font.color.rgb = rgb("2C2C2C")
+                        r_sub.bold = False
                 else:
                     run = p.add_run(text)
                     run.font.size = Pt(12)
@@ -554,16 +590,29 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
         return None, f"{type(e).__name__}: {e}\\n{traceback.format_exc()[-500:]}"
 
 def is_activity_item(item):
+    """True for recognised session/activity headings so they render bold.
+
+    Previously this only matched when the keyword was at the very START of
+    the text (head.startswith), which missed titles like
+    'BTS2026 - AI & Beyond Film' or 'IT CEOs interaction moderated by
+    NASSCOM' where the keyword sits in the middle. Now it matches the
+    keyword anywhere in the (first-line) text.
+    """
     head = (item or '').strip().lower()
-    prefixes = [
+    # Only look at the first physical line — a title/company line below
+    # shouldn't itself trigger bolding just because it contains a stray word.
+    head = head.split("\n", 1)[0]
+    keywords = [
         'welcome address', 'film', 'industry perspective', 'special address',
         'biotech sector perspective', 'it & deeptech sector perspective',
-        'response', 'keynote', 'inaugural address', 'opening remarks',
-        'vote of thanks', 'panel discussion', 'interaction', 'avgc sector perspective',
-        'startup ceos interaction', 'vc interaction', 'open house conversation',
-        'meet and greet', 'breakfast', 'lunch', 'tea', 'plenary', 'address'
+        'sector perspective', 'response', 'keynote', 'inaugural address',
+        'opening remarks', 'vote of thanks', 'panel discussion', 'interaction',
+        'avgc sector perspective', 'startup ceos interaction', 'vc interaction',
+        'open house conversation', 'meet and greet', 'breakfast', 'lunch',
+        'tea', 'plenary', 'address', 'perspective', 'progress report',
+        'key highlights', 'launch', 'felicitation', 'inauguration'
     ]
-    return any(head.startswith(p) for p in prefixes)
+    return any(re.search(r'\b' + re.escape(k) + r'\b', head) for k in keywords)
 
 def extract_all_names(rows, dais_text=""):
     import re as _re2
@@ -602,27 +651,52 @@ def extract_all_names(rows, dais_text=""):
         item = row.get('item', '')
         if not item:
             continue
-        by_matches = list(by_pattern.finditer(item))
+        item_lines = [ln.strip() for ln in str(item).split('\n') if ln.strip()]
+        if not item_lines:
+            continue
+        line1 = item_lines[0]
+        extra_lines = item_lines[1:]  # title / company already on their own lines
+
+        def _title_company(suffix):
+            """Combine a same-line suffix (e.g. 'IAS') with any following lines."""
+            if extra_lines:
+                title = extra_lines[0]
+                company = ', '.join(extra_lines[1:])
+                if suffix:
+                    title = f"{suffix}, {title}" if title else suffix
+                return title, company
+            # No separate lines were entered — fall back to splitting the
+            # suffix itself (legacy single-line comma-separated format).
+            parts = [p.strip() for p in suffix.split(',') if p.strip()]
+            title = parts[0] if parts else ''
+            company = ', '.join(parts[1:]) if len(parts) > 1 else ''
+            return title, company
+
+        matched = False
+        by_matches = list(by_pattern.finditer(line1))
         if by_matches:
-            rest = item[by_matches[-1].end():].strip().rstrip('.')
+            rest = line1[by_matches[-1].end():].strip().rstrip('.')
             if rest:
                 parts = [p.strip() for p in rest.split(',') if p.strip()]
                 name = parts[0] if parts else ''
-                title = parts[1] if len(parts) > 1 else ''
-                company = ', '.join(parts[2:]) if len(parts) > 2 else ''
-                add_name(name, title, company, item)
-        for m in title_pattern.finditer(item):
-            fragment = item[m.start():]
-            stop = _re2.search(r"\b(?:and|followed by|who|will|to|for)\b", fragment, _re2.I)
-            if stop:
-                fragment = fragment[:stop.start()]
-            fragment = fragment.strip().rstrip('.,')
-            parts = [p.strip() for p in fragment.split(',') if p.strip()]
-            name = parts[0] if parts else ''
-            title = parts[1] if len(parts) > 1 else ''
-            company = ', '.join(parts[2:]) if len(parts) > 2 else ''
-            if name:
-                add_name(name, title, company, item)
+                suffix = ', '.join(parts[1:]) if len(parts) > 1 else ''
+                title, company = _title_company(suffix)
+                if name:
+                    add_name(name, title, company, item)
+                    matched = True
+        if not matched:
+            for m in title_pattern.finditer(line1):
+                fragment = line1[m.start():]
+                stop = _re2.search(r"\b(?:and|followed by|who|will|to|for)\b", fragment, _re2.I)
+                if stop:
+                    fragment = fragment[:stop.start()]
+                fragment = fragment.strip().rstrip('.,')
+                parts = [p.strip() for p in fragment.split(',') if p.strip()]
+                name = parts[0] if parts else ''
+                suffix = ', '.join(parts[1:]) if len(parts) > 1 else ''
+                title, company = _title_company(suffix)
+                if name:
+                    add_name(name, title, company, item)
     return results
 
 
@@ -735,7 +809,8 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
         for i, row in enumerate(rows):
             eng, kan = get_script(row['item'], lang_code)
             item_para = doc.add_paragraph()
-            ir = item_para.add_run(f"{i+1}. {row['item']}")
+            item_oneline = _re.sub(r'\s*\n\s*', ', ', str(row['item'] or ''))
+            ir = item_para.add_run(f"{i+1}. {item_oneline}")
             if is_activity_item(row['item']):
                 ir.bold = True
             ir.font.size = Pt(11)
@@ -1115,12 +1190,25 @@ for col in ["item", "duration", "remarks"]:
 
 df_input = df_input[["item", "duration", "remarks"]]
 
+st.caption(
+    "💡 Double-click a Programme Item cell to expand it. Line breaks you type "
+    "(Enter) or paste from Word/Excel are now kept exactly as entered — line 1 "
+    "renders at 12pt (bold automatically for recognised activities like Welcome "
+    "Address, Perspective, Interaction, etc.), and any lines below it (e.g. "
+    "designation/company) render at 11.5pt underneath, just like a manually "
+    "formatted entry."
+)
+
 edited_df = st.data_editor(
     df_input,
     num_rows="dynamic",
     use_container_width=True,
     column_config={
-        "item": st.column_config.TextColumn("Programme Item", width="large"),
+        "item": st.column_config.TextColumn(
+            "Programme Item", width="large",
+            help="Line 1 = activity/name (12pt). Add more lines below for "
+                 "title/company (11.5pt) — line breaks are preserved as-is.",
+        ),
         "duration": st.column_config.NumberColumn("Duration (mins)", min_value=1, max_value=180, step=1),
         "remarks": st.column_config.TextColumn("Remarks / Notes", width="medium"),
     },
@@ -1158,10 +1246,11 @@ else:
 # ── Programme preview ─────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">🗂️ Programme Preview</div>', unsafe_allow_html=True)
 for row in rows:
+    _item_html = str(row["item"]).replace("\n", "<br>")
     st.markdown(
         f"<div style='padding:6px 0;border-bottom:1px solid #eee;'>"
         f"<span class='time-pill'>{row['slot']}</span>&nbsp;&nbsp;"
-        f"<b>{row['item']}</b></div>",
+        f"<b>{_item_html}</b></div>",
         unsafe_allow_html=True,
     )
 
