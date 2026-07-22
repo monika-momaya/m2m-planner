@@ -1247,6 +1247,17 @@ for c, label in zip(hcols, ["Item", "Duration (min)", "Remarks", "", "", ""]):
 _items = st.session_state.programme_items
 _to_delete = None
 _move = None
+
+def _safe_duration(val, default=5):
+    """Coerce a possibly-empty/non-numeric duration value into a safe int
+    within the widget's allowed 1-180 range, instead of letting int()
+    raise on '' or None (e.g. from a cleared field or restored history)."""
+    try:
+        d = int(float(val))
+    except (TypeError, ValueError):
+        return default
+    return min(max(d, 1), 180)
+
 for i, it in enumerate(_items):
     iid = it["id"]
     c = st.columns([5, 1.3, 2, 0.5, 0.5, 0.5])
@@ -1258,7 +1269,7 @@ for i, it in enumerate(_items):
         )
     with c[1]:
         new_dur = st.number_input(
-            "Duration", value=int(it.get("duration", 5) or 5), min_value=1, max_value=180,
+            "Duration", value=_safe_duration(it.get("duration", 5)), min_value=1, max_value=180,
             step=1, key=f"dur_{iid}", label_visibility="collapsed",
         )
     with c[2]:
