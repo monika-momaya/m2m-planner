@@ -561,8 +561,9 @@ def is_activity_item(item):
         'biotech sector perspective', 'it & deeptech sector perspective',
         'response', 'keynote', 'inaugural address', 'opening remarks',
         'vote of thanks', 'panel discussion', 'interaction', 'avgc sector perspective',
-        'startup ceos interaction', 'vc interaction', 'open house conversation',
-        'meet and greet', 'breakfast', 'lunch', 'tea', 'plenary', 'address'
+        'welcome address', 'film', 'industry perspective', 'special address',
+        'biotech sector perspective', 'it & deeptech sector perspective',
+        'avgc sector perspective', 'response by'
     ]
     return any(head.startswith(p) for p in prefixes)
 
@@ -588,7 +589,7 @@ def extract_all_names(rows, dais_text=""):
             entry = line.strip(' •	-')
             if not entry:
                 continue
-            parts = [p.strip() for p in _re2.split(r'\s*[,:\-–]\s*', entry) if p.strip()]
+            parts = [p.strip() for p in entry.split(',') if p.strip()] if ',' in entry else [entry.strip()]
             name = parts[0] if parts else ''
             title = parts[1] if len(parts) > 1 else ''
             company = ', '.join(parts[2:]) if len(parts) > 2 else ''
@@ -914,7 +915,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         bcell = ws1.cell(row=r, column=2)
         bcell.value = item
         bcell.fill = PatternFill("solid", fgColor="FFFFFF")
-        bcell.font = fnt(color=DARK, bold=addr)
+        bcell.font = fnt(color=DARK, bold=is_activity_item(item))
         bcell.alignment = aln(h="left", wrap=True)
         bcell.border = bdr()
 
@@ -981,7 +982,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         ac.value = f"={PP}!A{7+i}"
         bc.value = f"={PP}!B{7+i}"
         ac.font = fnt(color=DARK)
-        bc.font = fnt(color=DARK, bold=is_address(row.get('item','')))
+        bc.font = fnt(color=DARK, bold=is_activity_item(row.get('item','')))
         ac.fill = fill(WHITE); bc.fill = fill(WHITE)
         ac.border = bdr(); bc.border = bdr()
         ac.alignment = aln(h="left")
