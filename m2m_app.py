@@ -314,7 +314,7 @@ def normalize_item_text(text):
 
     # If line breaks are lost during paste, restore likely separators before common titles/designations.
     stuck_words = [
-        "Chairperson", "Chairman", "Secretary", "Minister", "Hon'ble", "Hon’ble",
+        "Chairperson", "Chairman", "Secretary", "Minister", "Hon'ble", "Hon'ble",
         "Managing Director", "Director", "Principal Secretary", "Additional Chief Secretary",
         "Deputy Chief Minister", "Chief Minister", "Vice Chancellor", "Commissioner",
         "Ambassador", "President", "Founder", "Co-Founder", "CEO", "CTO", "COO"
@@ -554,48 +554,50 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
         return None, f"{type(e).__name__}: {e}\\n{traceback.format_exc()[-500:]}"
 
 
+def is_activity_item(item):
+    head = (item or '').strip().lower()
+    prefixes = [
+        'welcome address', 'film', 'industry perspective', 'special address',
+        'biotech sector perspective', 'it & deeptech sector perspective',
+        'response', 'keynote', 'inaugural address', 'opening remarks',
+        'vote of thanks', 'panel discussion', 'interaction', 'avgc sector perspective',
+        'startup ceos interaction', 'vc interaction', 'open house conversation',
+        'meet and greet', 'breakfast', 'lunch', 'tea', 'plenary', 'address'
+    ]
+    return any(head.startswith(p) for p in prefixes)
+
 def extract_all_names(rows, dais_text=""):
     import re as _re2
     seen = set()
     results = []
 
-    def add_name(name_part, desig='', source=''):
+    def add_name(name_part, title='', company='', source=''):
         name_part = (name_part or '').strip(' ,.-')
-        desig = (desig or '').strip(' ,.-')
+        title = (title or '').strip(' ,.-')
+        company = (company or '').strip(' ,.-')
         if not name_part:
             return
         key = _re2.sub(r'\s+', ' ', name_part).lower()
         if key in seen:
             return
         seen.add(key)
-        results.append((name_part, desig, source))
+        results.append((name_part, title, company, source))
 
     if dais_text and str(dais_text).strip():
-        lines = str(dais_text).replace('\r\n', '\n').replace('\r', '\n').split('\n')
-        for line in lines:
+        for line in str(dais_text).splitlines():
             entry = line.strip(' •	-')
             if not entry:
                 continue
-            if ',' in entry:
-                name_part, desig = entry.split(',', 1)
-            elif ' - ' in entry:
-                name_part, desig = entry.split(' - ', 1)
-            elif ' – ' in entry:
-                name_part, desig = entry.split(' – ', 1)
-            elif ':' in entry:
-                name_part, desig = entry.split(':', 1)
-            else:
-                name_part, desig = entry, ''
-            add_name(name_part, desig, 'custom dais list')
+            parts = [p.strip() for p in _re2.split(r'\s*[,:\-–]\s*', entry) if p.strip()]
+            name = parts[0] if parts else ''
+            title = parts[1] if len(parts) > 1 else ''
+            company = ', '.join(parts[2:]) if len(parts) > 2 else ''
+            add_name(name, title, company, 'custom dais list')
         if results:
             return results
 
-    title_pattern = _re2.compile(
-        r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['’]?ble|Sri|"
-        r"Padma(?:shri|bhushan|vibhushan)|Padma Shri)\s+[A-Z][A-Za-z]",
-        _re2.IGNORECASE
-    )
-    by_pattern = _re2.compile(r"\bby\b", _re2.IGNORECASE)
+    title_pattern = _re2.compile(r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['']?ble|Sri|Padma(?:shri|bhushan|vibhushan)|Padma Shri)\s+[A-Z][A-Za-z]", _re2.IGNORECASE)
+    by_pattern = _re2.compile(r"by", _re2.IGNORECASE)
 
     for row in rows:
         item = row.get('item', '')
@@ -605,26 +607,25 @@ def extract_all_names(rows, dais_text=""):
         if by_matches:
             rest = item[by_matches[-1].end():].strip().rstrip('.')
             if rest:
-                if ',' in rest:
-                    name_part, desig = rest.split(',', 1)
-                else:
-                    name_part, desig = rest, ''
-                add_name(name_part, desig, item)
+                parts = [p.strip() for p in rest.split(',') if p.strip()]
+                name = parts[0] if parts else ''
+                title = parts[1] if len(parts) > 1 else ''
+                company = ', '.join(parts[2:]) if len(parts) > 2 else ''
+                add_name(name, title, company, item)
         for m in title_pattern.finditer(item):
             fragment = item[m.start():]
-            stop = _re2.search(r'\b(?:and|followed by|who|will|to|for)\b', fragment, _re2.I)
+            stop = _re2.search(r"(?:and|followed by|who|will|to|for)", fragment, _re2.I)
             if stop:
                 fragment = fragment[:stop.start()]
-            fragment = fragment.strip().rstrip(',.')
-            if ',' in fragment:
-                name_part, desig = fragment.split(',', 1)
-            else:
-                name_part, desig = fragment, ''
-            name_lower = (name_part or '').lower()
-            already_covered = any(name_lower in s or s in name_lower for s in seen)
-            if name_part and not already_covered:
-                add_name(name_part, desig, item)
+            fragment = fragment.strip().rstrip('.,')
+            parts = [p.strip() for p in fragment.split(',') if p.strip()]
+            name = parts[0] if parts else ''
+            title = parts[1] if len(parts) > 1 else ''
+            company = ', '.join(parts[2:]) if len(parts) > 2 else ''
+            if name:
+                add_name(name, title, company, item)
     return results
+
 
 def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code="kan", dais_text=""):
     try:
@@ -687,24 +688,38 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
 
         all_names = extract_all_names(rows, dais_text)
         if all_names:
-            dais_table = doc.add_table(rows=1, cols=2)
+            dais_table = doc.add_table(rows=1, cols=1)
             dais_table.autofit = False
-            hdr_cells = dais_table.rows[0].cells
-            hdr_cells[0].width = Cm(5.5); hdr_cells[1].width = Cm(11.9)
-            for cell, text in zip(hdr_cells, ["Name", "Designation / Title"]):
-                set_cell_bg(cell, "F5F5F5"); visible_borders(cell)
-                p = cell.paragraphs[0]
-                r = p.add_run(text); r.bold = True; r.font.size = Pt(11); r.font.name = 'Calibri'
-            for i, (name, desig, source) in enumerate(all_names):
+            hdr = dais_table.rows[0].cells[0]
+            hdr.width = Cm(17.4)
+            set_cell_bg(hdr, "F5F5F5"); visible_borders(hdr)
+            p = hdr.paragraphs[0]
+            r = p.add_run("Dignitaries on the Dais")
+            r.bold = True; r.font.size = Pt(11); r.font.name = 'Calibri'
+            for i, (name, title, company, source) in enumerate(all_names):
                 tr = dais_table.add_row()
-                bg = "FFFFFF" if i % 2 == 0 else "FAFAFA"
-                tr.cells[0].width = Cm(5.5); tr.cells[1].width = Cm(11.9)
-                for idx, (cell, text) in enumerate(zip(tr.cells, [name, desig])):
-                    set_cell_bg(cell, bg); visible_borders(cell)
-                    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
-                    p = cell.paragraphs[0]
-                    run = p.add_run(text); run.font.size = Pt(11); run.font.name = 'Calibri'
-                    if idx == 0: run.bold = True
+                cell = tr.cells[0]
+                cell.width = Cm(17.4)
+                set_cell_bg(cell, "FFFFFF" if i % 2 == 0 else "FAFAFA"); visible_borders(cell)
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+                cell.text = ""
+                p1 = cell.paragraphs[0]
+                r1 = p1.add_run(name)
+                r1.font.size = Pt(12)
+                r1.font.name = 'Calibri'
+                r1.bold = True
+                if title:
+                    p2 = cell.add_paragraph()
+                    r2 = p2.add_run(title)
+                    r2.font.size = Pt(11.5)
+                    r2.font.name = 'Calibri'
+                    r2.bold = False
+                if company:
+                    p3 = cell.add_paragraph()
+                    r3 = p3.add_run(company)
+                    r3.font.size = Pt(11.5)
+                    r3.font.name = 'Calibri'
+                    r3.bold = False
         else:
             doc.add_paragraph().add_run("No names detected in the programme.")
 
@@ -722,7 +737,9 @@ def build_mc_doc(event_name, event_date, venue, rows, logo_bytes=None, lang_code
             eng, kan = get_script(row['item'], lang_code)
             item_para = doc.add_paragraph()
             ir = item_para.add_run(f"{i+1}. {row['item']}")
-            ir.bold = True; ir.font.size = Pt(11)
+            if is_activity_item(row['item']):
+                ir.bold = True
+            ir.font.size = Pt(11)
             ir.font.color.rgb = rgb("1A5276") if is_address(row['item']) else rgb(NAVY)
             ir.font.name = 'Calibri'
             sr2 = item_para.add_run(f" — {row['slot']}")
@@ -1153,18 +1170,23 @@ for row in rows:
 st.divider()
 st.markdown("### Dignitaries on the Dais")
 dais_text = st.text_area(
-    "Optional: paste dignitaries for MC Copy (one per line; format like Name, Designation)",
+    "Optional: paste dignitaries for MC Copy (one per line)",
     value=st.session_state.get("dais_text", ""),
     height=180,
     placeholder="""Example:
-Shri S. Gopalakrishnan (Kris), Chairperson, Vision Group on IT, Govt. of Karnataka
-Dr. Kiran Mazumdar-Shaw, Chairperson, Vision Group on Biotech, Govt. of Karnataka
-Dr. G. Parameshwara, Hon'ble Deputy Chief Minister, Govt. of Karnataka""",
+Shri S. Gopalakrishnan (Kris), Chairperson
+Vision Group on IT, Govt. of Karnataka
+Dr. Kiran Mazumdar-Shaw, Chairperson
+Vision Group on Biotech, Govt. of Karnataka
+Dr. G. Parameshwara, Hon'ble Deputy Chief Minister
+Govt. of Karnataka""",
     key="dais_text_input",
 )
-st.caption("If this box is filled, the MC Document will use this list for 'Dignitaries on the Dais'. If left blank, names will be pulled from the M2M programme.")
+st.caption("If this box is filled, the MC Document will use this list. If left blank, names will be pulled from the M2M programme.")
 st.session_state["dais_text"] = dais_text
 
+
+st.info("Paste one dignitary per line. The MC document will keep line breaks, place the name first (12 pt), then title/company below (11.5 pt), and bold activity titles like Welcome Address, Film, Industry Perspective, and Special Address.")
 st.markdown("### 📥 Download")
 
 fname_base = f"Minute-to-Minute Programme for {safe_filename(event_name)}" if event_name else "Minute-to-Minute Programme"
