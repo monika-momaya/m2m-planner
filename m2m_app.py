@@ -553,7 +553,6 @@ def build_word(event_name, event_date, venue, rows, logo_bytes=None, lang_code="
         import traceback
         return None, f"{type(e).__name__}: {e}\\n{traceback.format_exc()[-500:]}"
 
-
 def is_activity_item(item):
     head = (item or '').strip().lower()
     prefixes = [
@@ -561,9 +560,8 @@ def is_activity_item(item):
         'biotech sector perspective', 'it & deeptech sector perspective',
         'response', 'keynote', 'inaugural address', 'opening remarks',
         'vote of thanks', 'panel discussion', 'interaction', 'avgc sector perspective',
-        'welcome address', 'film', 'industry perspective', 'special address',
-        'biotech sector perspective', 'it & deeptech sector perspective',
-        'avgc sector perspective', 'response by'
+        'startup ceos interaction', 'vc interaction', 'open house conversation',
+        'meet and greet', 'breakfast', 'lunch', 'tea', 'plenary', 'address'
     ]
     return any(head.startswith(p) for p in prefixes)
 
@@ -586,10 +584,10 @@ def extract_all_names(rows, dais_text=""):
 
     if dais_text and str(dais_text).strip():
         for line in str(dais_text).splitlines():
-            entry = line.strip(' •	-')
+            entry = line.strip(' •\t-')
             if not entry:
                 continue
-            parts = [p.strip() for p in entry.split(',') if p.strip()] if ',' in entry else [entry.strip()]
+            parts = [p.strip() for p in _re2.split(r'\s*[,:\-–]\s*', entry) if p.strip()]
             name = parts[0] if parts else ''
             title = parts[1] if len(parts) > 1 else ''
             company = ', '.join(parts[2:]) if len(parts) > 2 else ''
@@ -598,7 +596,7 @@ def extract_all_names(rows, dais_text=""):
             return results
 
     title_pattern = _re2.compile(r"(?:Shri|Smt\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Prof\.?|H\.E\.?|Hon['']?ble|Sri|Padma(?:shri|bhushan|vibhushan)|Padma Shri)\s+[A-Z][A-Za-z]", _re2.IGNORECASE)
-    by_pattern = _re2.compile(r"by", _re2.IGNORECASE)
+    by_pattern = _re2.compile(r"\bby\b", _re2.IGNORECASE)
 
     for row in rows:
         item = row.get('item', '')
@@ -615,7 +613,7 @@ def extract_all_names(rows, dais_text=""):
                 add_name(name, title, company, item)
         for m in title_pattern.finditer(item):
             fragment = item[m.start():]
-            stop = _re2.search(r"(?:and|followed by|who|will|to|for)", fragment, _re2.I)
+            stop = _re2.search(r"\b(?:and|followed by|who|will|to|for)\b", fragment, _re2.I)
             if stop:
                 fragment = fragment[:stop.start()]
             fragment = fragment.strip().rstrip('.,')
@@ -915,7 +913,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         bcell = ws1.cell(row=r, column=2)
         bcell.value = item
         bcell.fill = PatternFill("solid", fgColor="FFFFFF")
-        bcell.font = fnt(color=DARK, bold=is_activity_item(item))
+        bcell.font = fnt(color=DARK, bold=addr)
         bcell.alignment = aln(h="left", wrap=True)
         bcell.border = bdr()
 
@@ -982,7 +980,7 @@ def build_excel(event_name, event_date, venue, rows, logo_bytes=None, lang_code=
         ac.value = f"={PP}!A{7+i}"
         bc.value = f"={PP}!B{7+i}"
         ac.font = fnt(color=DARK)
-        bc.font = fnt(color=DARK, bold=is_activity_item(row.get('item','')))
+        bc.font = fnt(color=DARK, bold=is_address(row.get('item','')))
         ac.fill = fill(WHITE); bc.fill = fill(WHITE)
         ac.border = bdr(); bc.border = bdr()
         ac.alignment = aln(h="left")
