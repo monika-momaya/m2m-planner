@@ -1190,13 +1190,56 @@ for col in ["item", "duration", "remarks"]:
 
 df_input = df_input[["item", "duration", "remarks"]]
 
+st.markdown("#### 📋 Add items with a name + title/company (multi-line)")
 st.caption(
-    "💡 Double-click a Programme Item cell to expand it. Line breaks you type "
-    "(Enter) or paste from Word/Excel are now kept exactly as entered — line 1 "
-    "renders at 12pt (bold automatically for recognised activities like Welcome "
-    "Address, Perspective, Interaction, etc.), and any lines below it (e.g. "
-    "designation/company) render at 11.5pt underneath, just like a manually "
-    "formatted entry."
+    "The table's cells are single-line, so a line break typed or pasted into "
+    "a table cell gets collapsed — that's why everything came out on one bold "
+    "line last time. Paste multi-line entries here instead (this box behaves "
+    "like a normal Word/Excel paste and keeps real line breaks). "
+    "**One item per block, separated by a blank line.** Line 1 of a block = "
+    "the activity + name (renders bold, 12pt). Any lines below it = "
+    "title/company (renders 11.5pt, not bold, underneath — just like your "
+    "reference screenshot)."
+)
+bulk_text = st.text_area(
+    "Paste programme items here (blank line between items)",
+    height=170,
+    key="bulk_item_paste",
+    placeholder="""Meet and Greet over Breakfast
+
+Welcome Address by Dr. Avinash Menon Rajendran, IAS
+Director, Dept. of Electronics, IT & BT and Managing Director, KITS,
+Govt. of Karnataka
+
+BTS2026 - AI & Beyond Film""",
+)
+bcol1, bcol2 = st.columns([1, 4])
+with bcol1:
+    add_clicked = st.button("➕ Add to Programme", use_container_width=True)
+with bcol2:
+    st.caption("New items are added with a default 5-min duration — adjust durations in the table below.")
+
+if add_clicked:
+    raw_blocks = re.split(r"\n\s*\n", bulk_text.strip()) if bulk_text.strip() else []
+    added = 0
+    for block in raw_blocks:
+        cleaned = normalize_item_text(block)
+        if not cleaned:
+            continue
+        st.session_state.programme_items.append({"item": cleaned, "duration": 5, "remarks": ""})
+        added += 1
+    if added:
+        st.session_state["bulk_item_paste"] = ""
+        st.success(f"Added {added} item(s) below — set their durations in the table.")
+        st.rerun()
+    else:
+        st.warning("Nothing to add — paste some text into the box first.")
+
+st.markdown("#### 📝 Programme table")
+st.caption(
+    "Good for quick single-line items, reordering, durations, and remarks. "
+    "For a name + title/company on separate lines, use the paste box above — "
+    "typing/pasting a line break directly into a table cell won't be kept."
 )
 
 edited_df = st.data_editor(
@@ -1206,8 +1249,8 @@ edited_df = st.data_editor(
     column_config={
         "item": st.column_config.TextColumn(
             "Programme Item", width="large",
-            help="Line 1 = activity/name (12pt). Add more lines below for "
-                 "title/company (11.5pt) — line breaks are preserved as-is.",
+            help="Single-line editing. For a name + title/company on separate "
+                 "lines (12pt / 11.5pt), use the paste box above instead.",
         ),
         "duration": st.column_config.NumberColumn("Duration (mins)", min_value=1, max_value=180, step=1),
         "remarks": st.column_config.TextColumn("Remarks / Notes", width="medium"),
